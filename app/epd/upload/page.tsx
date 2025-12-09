@@ -44,6 +44,17 @@ export default function UploadPage() {
     setImpactValues((prev) => ({ ...prev, [impactKey(indicator, setType, stage)]: value === '' ? '' : Number(value) }));
   };
 
+  const parseErrorResponse = async (res: Response) => {
+    try {
+      const data = await res.json();
+      if (typeof data?.error === 'string') return data.error;
+      if (typeof data?.message === 'string') return data.message;
+    } catch (err) {
+      console.error('Kon foutmelding niet parsen', err);
+    }
+    return null;
+  };
+
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const dropped = event.dataTransfer.files?.[0];
@@ -84,7 +95,10 @@ export default function UploadPage() {
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('Upload mislukt');
+      if (!res.ok) {
+        const errorMessage = await parseErrorResponse(res);
+        throw new Error(errorMessage || 'Upload mislukt');
+      }
       const json = await res.json();
       setFileId(json.fileId);
       setParsed(json.parsedEpd);
