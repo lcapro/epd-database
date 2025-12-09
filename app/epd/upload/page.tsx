@@ -17,6 +17,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedEpd | null>(null);
+  const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export default function UploadPage() {
     }
     setLoading(true);
     setError(null);
+    setParseWarning(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -101,8 +103,13 @@ export default function UploadPage() {
       }
       const json = await res.json();
       setFileId(json.fileId);
-      setParsed(json.parsedEpd);
-      loadParsedIntoForm(json.parsedEpd);
+      setParsed(json.parsedEpd ?? null);
+      if (json.parseError) {
+        setParseWarning(`Kon PDF-tekst niet uitlezen: ${json.parseError}. Vul de velden handmatig in.`);
+      }
+      if (json.parsedEpd) {
+        loadParsedIntoForm(json.parsedEpd);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -242,6 +249,7 @@ export default function UploadPage() {
 
         {parsedInfo}
         {error && <div className="text-red-600 text-sm">{error}</div>}
+        {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
       </div>
 
       <div className="card space-y-3">
