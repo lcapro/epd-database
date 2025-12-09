@@ -85,12 +85,18 @@ export function exportToCsv(rows: Record<string, RowValue>[]): string {
   return lines.join('\n');
 }
 
-export async function exportToWorkbook(rows: Record<string, RowValue>[]): Promise<Buffer> {
+export async function exportToWorkbook(
+  rows: Record<string, RowValue>[]
+): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('EPDs');
+
   if (rows.length > 0) {
     sheet.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
     rows.forEach((row) => sheet.addRow(row));
   }
-  return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+
+  // exceljs geeft al een ArrayBuffer terug, dat is precies wat NextResponse verwacht
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return arrayBuffer;
 }
