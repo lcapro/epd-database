@@ -17,6 +17,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<ParsedEpd | null>(null);
+  const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,17 @@ export default function UploadPage() {
 
   const updateImpact = (indicator: 'MKI' | 'CO2', setType: EpdSetType, stage: EpdImpactStage, value: string) => {
     setImpactValues((prev) => ({ ...prev, [impactKey(indicator, setType, stage)]: value === '' ? '' : Number(value) }));
+  };
+
+  const parseErrorResponse = async (res: Response) => {
+    try {
+      const data = await res.json();
+      if (typeof data?.error === 'string') return data.error;
+      if (typeof data?.message === 'string') return data.message;
+    } catch (err) {
+      console.error('Kon foutmelding niet parsen', err);
+    }
+    return null;
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -77,6 +89,7 @@ export default function UploadPage() {
     }
     setLoading(true);
     setError(null);
+    setParseWarning(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -84,11 +97,19 @@ export default function UploadPage() {
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('Upload mislukt');
+      if (!res.ok) {
+        const errorMessage = await parseErrorResponse(res);
+        throw new Error(errorMessage || 'Upload mislukt');
+      }
       const json = await res.json();
       setFileId(json.fileId);
-      setParsed(json.parsedEpd);
-      loadParsedIntoForm(json.parsedEpd);
+      setParsed(json.parsedEpd ?? null);
+      if (json.parseError) {
+        setParseWarning(`Kon PDF-tekst niet uitlezen: ${json.parseError}. Vul de velden handmatig in.`);
+      }
+      if (json.parsedEpd) {
+        loadParsedIntoForm(json.parsedEpd);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -228,6 +249,7 @@ export default function UploadPage() {
 
         {parsedInfo}
         {error && <div className="text-red-600 text-sm">{error}</div>}
+        {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
       </div>
 
       <div className="card space-y-3">
