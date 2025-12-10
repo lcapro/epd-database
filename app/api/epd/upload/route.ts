@@ -6,6 +6,13 @@ import { parseEpd } from '@/lib/epdParser';
 
 export const runtime = 'nodejs';
 
+function sanitizePdfText(text: string): string {
+  // Replace control characters that are not typically valid in JSON/text storage
+  const withoutControl = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
+  // Strip lone surrogate pairs to avoid invalid Unicode sequences
+  return withoutControl.replace(/([\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF])/g, '');
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -40,7 +47,7 @@ export async function POST(request: Request) {
 
     try {
       const parsedPdf = await pdfParse(buffer);
-      parsedPdfText = parsedPdf.text || '';
+      parsedPdfText = sanitizePdfText(parsedPdf.text || '');
       parsedEpd = parseEpd(parsedPdfText);
     } catch (err) {
       console.error('Kon PDF-tekst niet uitlezen', err);
@@ -53,12 +60,26 @@ export async function POST(request: Request) {
       .select('id')
       .single();
 
-    if (error || !data) {
-      return NextResponse.json({ error: error?.message || 'Kon bestand niet opslaan' }, { status: 500 });
+    let insertData = data;
+    let insertError = error;
+
+    if (insertError && insertError.message?.toLowerCase().includes('unsupported unicode escape')) {
+      console.warn('Kon raw_text niet opslaan door Unicode-fout, probeer zonder tekst', insertError);
+      const retry = await adminClient
+        .from('epd_files')
+        .insert({ storage_path: path, original_filename: filename, raw_text: '' })
+        .select('id')
+        .single();
+      insertData = retry.data;
+      insertError = retry.error;
+    }
+
+    if (insertError || !insertData) {
+      return NextResponse.json({ error: insertError?.message || 'Kon bestand niet opslaan' }, { status: 500 });
     }
 
     return NextResponse.json({
-      fileId: data.id,
+      fileId: insertData.id,
       storagePath: path,
       rawText: parsedPdfText,
       parsedEpd,
