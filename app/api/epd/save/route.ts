@@ -54,6 +54,8 @@ export async function POST(request: Request) {
       lca_method: lcaMethod || null,
       pcr_version: pcrVersion || null,
       database_name: databaseName || null,
+      database_nmd_version: databaseNmdVersion || null,
+      database_ecoinvent_version: databaseEcoinventVersion || null,
       publication_date: publicationDate || null,
       expiration_date: expirationDate || null,
       verifier_name: verifierName || null,
