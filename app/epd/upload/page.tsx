@@ -324,6 +324,8 @@ export default function UploadPage() {
           <div><strong>Publicatie:</strong> {parsed.publicationDate || '-'}</div>
           <div><strong>Geldigheid:</strong> {parsed.expirationDate || '-'}</div>
           <div><strong>Set:</strong> {parsed.standardSet}</div>
+          <div><strong>NMD database:</strong> {parsed.databaseNmdVersion || '-'}</div>
+          <div><strong>EcoInvent:</strong> {parsed.databaseEcoinventVersion || '-'}</div>
         </div>
       </div>
     );
@@ -503,6 +505,27 @@ export default function UploadPage() {
               onChange={(e) => setForm({ ...form, databaseName: e.target.value })}
             />
           </label>
+
+          <label className="space-y-1">
+            <span className="text-sm">NMD database versie</span>
+            <input
+              className="input"
+              value={form.databaseNmdVersion}
+              onChange={(e) => setForm({ ...form, databaseNmdVersion: e.target.value })}
+              placeholder="bijv. NMD v3.5"
+            />
+          </label>
+          
+          <label className="space-y-1">
+            <span className="text-sm">EcoInvent versie</span>
+            <input
+              className="input"
+              value={form.databaseEcoinventVersion}
+              onChange={(e) => setForm({ ...form, databaseEcoinventVersion: e.target.value })}
+              placeholder="bijv. EcoInvent v3.6"
+            />
+          </label>
+
 
           <label className="space-y-1">
             <span className="text-sm">Datum publicatie</span>
