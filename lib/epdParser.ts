@@ -1,310 +1,267 @@
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from './types';
 
-/**
- * Stap 6 – Parser (volledig, aangepast)
- * Doelen:
- * - Metadata (product, FU, producent, publicatie/geldigheid, verifier, PCR/database) beter uit tekst halen
- * - Impacttabellen robuust uitlezen voor Ecochain/NMD-achtige formats (zoals jouw asfalt PDF)
- * - Alle impactcategorieën (MKI, GWP, ADPE, ADPF, ODP, POCP, AP, EP, HTP, FAETP, MAETP, TETP, + resources/waste)
- * - Unit per indicator meenemen (als jouw types/schema dit ondersteunen)
- *
- * Belangrijk:
- * - We behouden een "lineText" (met \n) zodat tabellen beter te herkennen zijn.
- * - Daarnaast maken we "flatText" (whitespace compact) voor metadata-regex.
- *
- * Vereist/aanbevolen:
- * - ParsedImpact.indicator: string (niet alleen 'MKI'|'CO2')
- * - ParsedImpact.unit?: string
- * - UI: niet hardcoden op MKI/CO2, maar dynamisch op parsed.impacts/DB (dat was stap 4/5).
- */
-
 const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 
-// In veel EPD teksten komt "A1-A3" voor. In jouw UI/DB noemen we dat A1_A3.
-const STAGE_ORDER_FROM_TABLE: Array<{ label: string; stage: EpdImpactStage }> = [
-  { label: 'A1', stage: 'A1' },
-  { label: 'A2', stage: 'A2' },
-  { label: 'A3', stage: 'A3' },
-  { label: 'A1-A3', stage: 'A1_A3' },
-  { label: 'D', stage: 'D' },
-];
-
-// Belangrijkste indicatoren om te scannen in tabellen.
-// (Je kunt dit later uitbreiden. Het mooie: UI kan alles tonen wat binnenkomt.)
-const INDICATORS_ORDERED: string[] = [
-  // Core impact
-  'MKI',
-  'GWP',
-  'ADPE',
-  'ADPF',
-  'ODP',
-  'POCP',
-  'AP',
-  'EP',
-  'HTP',
-  'FAETP',
-  'MAETP',
-  'TETP',
-
-  // Resource / energie / materialen (EN15804-achtig)
-  'PERE',
-  'PERM',
-  'PERT',
-  'PENRE',
-  'PENRM',
-  'PENRT',
-  'PET',
-  'SM',
-  'RSF',
-  'NRSF',
-  'FW',
-
-  // Waste / output flows
-  'HWD',
-  'NHWD',
-  'RWD',
-  'CRU',
-  'MFR',
-  'MER',
-  'EE',
-  'EET',
-  'EEE',
-];
-
-// Variaties / aliassen die je in PDF-tekst ziet.
-const INDICATOR_ALIASES: Record<string, string> = {
-  // Soms staat CO2 of "CO2-tot" etc. In tabellen zie je vaak GWP.
-  CO2: 'GWP',
-  'CO2-tot': 'GWP',
-  'GWP-tot': 'GWP',
-  'GWP-total': 'GWP',
-  'GWP tot': 'GWP',
-};
-
-function normalizeLines(input: string): string {
-  // Houd linebreaks intact (tabellen!)
+// -------------- helpers: text normalisatie --------------
+/**
+ * Belangrijk: behoud newlines, anders kun je geen "key: value" en tabellen betrouwbaar parsen.
+ * - normaliseert line endings
+ * - trimt elke regel
+ * - behoudt lege regels (handig als “sectie” scheiding)
+ */
+function normalizePreserveLines(input: string): string {
   return input
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    .replace(/[ \t]+/g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function normalizeFlat(input: string): string {
-  // Compact voor metadata zoeken
-  return input.replace(/\s+/g, ' ').trim();
-}
-
-function cleanUnit(unit: string): string {
-  return unit
-    .replace(/\s+/g, ' ')
-    .replace(/\u00A0/g, ' ')
-    .trim()
-    .replace(/^\[|\]$/g, '');
-}
-
-/**
- * Getal parser:
- * - 3,655E+0
- * - 6,419E+0
- * - -1,664E+1
- * - 0 / 000000
- * - 12.34
- */
-function parseNumberToken(token?: string | null): number | undefined {
-  if (!token) return undefined;
-  const t = token.trim();
-  if (!t) return undefined;
-
-  // Soms komt "000000" voor -> 0
-  if (/^0+$/.test(t)) return 0;
-
-  // Normaliseer decimal comma
-  const normalized = t.replace(',', '.');
-
-  // parseFloat pakt ook scientific notation
-  const parsed = parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function dateFromTextLoose(text: string): string | undefined {
-  // ondersteunt:
-  // - 2024-11-28
-  // - 28-11-2024
-  // - 28/11/2024
-  const t = text || '';
-  const iso = t.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
-  if (iso) {
-    const [_, y, m, d] = iso;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-
-  const dmy = t.match(/\b(0?[1-9]|[12]\d|3[01])[-/](0?[1-9]|1[0-2])[-/](20\d{2})\b/);
-  if (dmy) {
-    const [_, d, m, y] = dmy;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  return undefined;
-}
-
-function detectStandardSet(flatText: string): EpdSetType {
-  const lowered = flatText.toLowerCase();
-  // In jouw sample: "SBK set 1" staat expliciet
-  if (lowered.includes('sbk set 1') || lowered.includes('en 15804+a1') || lowered.includes('en15804 +a1')) {
-    return 'SBK_SET_1';
-  }
-  if (lowered.includes('sbk set 2') || lowered.includes('en 15804+a2') || lowered.includes('en15804 +a2')) {
-    return 'SBK_SET_2';
-  }
-  return 'UNKNOWN';
-}
-
-/**
- * Vind secties in lineText op basis van header hints.
- * We knippen de tekst van header tot de volgende header.
- */
-function sliceSection(lineText: string, headerRegex: RegExp): string | null {
-  const m = headerRegex.exec(lineText);
-  if (!m || m.index === undefined) return null;
-
-  const start = m.index;
-  const afterStart = lineText.slice(start);
-
-  // Stop bij een volgende "Resultaten" of "Gebruik" of "Output" of einde doc.
-  const stop = afterStart.search(
-    /\n\s*(Resultaten\s+Milieu-impact|Gebruik\s+van\s+grondstof|Output\s+stromen|Verklaring\s+van\s+vertrouwelijkheid|Ecochain\s+Technologies)\b/i
-  );
-
-  if (stop === -1) return afterStart;
-  return afterStart.slice(0, stop);
-}
-
-/**
- * Parse 1 tabelregel voor 1 indicator:
- * We verwachten:
- *   INDICATOR + unit + A1 + A2 + A3 + A1-A3 + D + (optioneel Totaal)
- *
- * Voorbeeld (uit jouw PDF):
- *   MKI Euro 3,655E+0 7,058E-1 1,520E+0 5,881E+0 -2,198E+0 3,683E+0
- *   GWP kg CO 2 -eq 2,840E+1 6,419E+0 2,131E+1 5,612E+1 -1,664E+1 3,948E+1
- */
-function parseIndicatorRowFromSection(sectionFlat: string, indicator: string): { unit?: string; values: number[] } | null {
-  // Nummer-token: 1) scientific  2) gewone float/int  3) 000000
-  const num = String.raw`([-+]?\d+(?:[.,]\d+)?(?:E[-+]?\d+)?|0+)`;
-
-  // Unit: alles tussen indicator en eerste number (maar niet te lang)
-  // We beperken tot 60 chars om runaway te vermijden.
-  const re = new RegExp(
-    String.raw`(?:^|\s)${indicator}\s+(.{0,60}?)\s+${num}\s+${num}\s+${num}\s+${num}\s+${num}(?:\s+${num})?`,
-    'i'
-  );
-
-  const m = sectionFlat.match(re);
-  if (!m) return null;
-
-  // m[1] = unit-ish
-  // daarna volgen de numbers in match groups
-  // Let op: afhankelijk van optional total kan group count variëren
-  const unitRaw = m[1] || '';
-  const nums = m.slice(2).filter((x) => typeof x === 'string' && x.length > 0) as string[];
-
-  // We willen minimaal 5 waarden (A1..D)
-  const values = nums.map((x) => parseNumberToken(x)).filter((v) => v !== undefined) as number[];
-  if (values.length < 5) return null;
-
-  return { unit: cleanUnit(unitRaw), values };
-}
-
-/**
- * Parse impacttabellen:
- * - zoekt "Resultaten Milieu-impact SBK set 1" en set 2
- * - pakt alle INDICATORS_ORDERED die gevonden worden
- */
-function parseImpactTables(lineText: string): ParsedImpact[] {
-  const impacts: ParsedImpact[] = [];
-
-  // we maken ook een "sectionFlat" voor regex-matching in 1 regel.
-  const sections: Array<{ setType: EpdSetType; text: string }> = [];
-
-  const s1 = sliceSection(lineText, /Resultaten\s+Milieu-impact\s+SBK\s+set\s+1/i);
-  if (s1) sections.push({ setType: 'SBK_SET_1', text: s1 });
-
-  const s2 = sliceSection(lineText, /Resultaten\s+Milieu-impact\s+SBK\s+set\s+2/i);
-  if (s2) sections.push({ setType: 'SBK_SET_2', text: s2 });
-
-  // Soms staat er geen "set 2" sectie. Dan blijft het bij set 1.
-  for (const section of sections) {
-    const sectionFlat = normalizeFlat(section.text);
-
-    for (const rawIndicator of INDICATORS_ORDERED) {
-      const indicator = INDICATOR_ALIASES[rawIndicator] || rawIndicator;
-      const row = parseIndicatorRowFromSection(sectionFlat, indicator);
-      if (!row) continue;
-
-      // row.values: meestal 6 (A1..D + totaal), maar we nemen de eerste 5 volgens STAGE_ORDER.
-      const firstFive = row.values.slice(0, 5);
-
-      // unit kan in rare gevallen leeg -> undefined
-      const unit = row.unit && row.unit !== '-' ? row.unit : undefined;
-
-      STAGE_ORDER_FROM_TABLE.forEach((st, idx) => {
-        const v = firstFive[idx];
-        if (v === undefined) return;
-
-        // ParsedImpact type in jouw project:
-        // - als je indicator al naar string hebt verruimd: OK
-        // - zo niet: deze "as any" voorkomt TS gezeur
-        impacts.push({
-          indicator: indicator as any,
-          setType: section.setType,
-          stage: st.stage,
-          value: v,
-          // unit is optioneel; als jouw types dit nog niet heeft, dan is dit ook veilig via "as any"
-          unit,
-        } as any);
-      });
-    }
-  }
-
-  return impacts;
-}
-
-function computeA1A3IfMissing(impacts: ParsedImpact[], setType: EpdSetType, indicator: string): void {
-  const hasA1A3 = impacts.some(
-    (i: any) => i.setType === setType && i.indicator === indicator && i.stage === 'A1_A3'
-  );
-  if (hasA1A3) return;
-
-  const a1 = impacts.find((i: any) => i.setType === setType && i.indicator === indicator && i.stage === 'A1');
-  const a2 = impacts.find((i: any) => i.setType === setType && i.indicator === indicator && i.stage === 'A2');
-  const a3 = impacts.find((i: any) => i.setType === setType && i.indicator === indicator && i.stage === 'A3');
-  if (a1 && a2 && a3) {
-    const unit = (a1 as any).unit || (a2 as any).unit || (a3 as any).unit;
-    impacts.push({
-      indicator: indicator as any,
-      setType,
-      stage: 'A1_A3',
-      value: (a1 as any).value + (a2 as any).value + (a3 as any).value,
-      unit,
-    } as any);
-  }
-}
-
-/**
- * Metadata extractors (robuster voor jouw tekst)
- */
-function matchFirst(flatText: string, patterns: RegExp[]): string | undefined {
+function firstMatch(text: string, patterns: RegExp[]): string | undefined {
   for (const p of patterns) {
-    const m = flatText.match(p);
+    const m = text.match(p);
     if (m?.[1]) return m[1].trim();
   }
   return undefined;
 }
 
+function parseNumberLoose(value?: string | null): number | undefined {
+  if (!value) return undefined;
+
+  // Ondersteun: 3,655E+0  |  2,840E+1  |  16,419E+0  |  0,123  |  1.234
+  // 1) verwijder spaties
+  const v = value.replace(/\s+/g, '');
+
+  // 2) als het scientific is met komma als decimaal
+  //    vervang eerst komma door punt, maar alleen als er geen punt-decimaal al “logisch” is
+  //    (hier is het veilig: in NL pdfs zie je vaak komma-decimaal)
+  const normalized = v.replace(',', '.');
+
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function dateFromText(text: string): string | undefined {
+  // 2024-11-28 of 2024/11/28
+  const matchIso = text.match(/(20\d{2}[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01]))/);
+  if (matchIso?.[1]) return matchIso[1].replace(/\//g, '-');
+
+  // 28-11-2024 of 28/11/2024
+  const matchNl = text.match(/(0?[1-9]|[12]\d|3[01])[-/](0?[1-9]|1[0-2])[-/](20\d{2})/);
+  if (matchNl) {
+    const day = matchNl[1].padStart(2, '0');
+    const month = matchNl[2].padStart(2, '0');
+    const year = matchNl[3];
+    return `${year}-${month}-${day}`;
+  }
+  return undefined;
+}
+
+// -------------- helpers: “key: value” parsing --------------
+function getLineValue(text: string, labelVariants: string[]): string | undefined {
+  // zoekt regels als:
+  // "Datum van publicatie: 28-11-2024"
+  // "PCR: NL-PCR Asfalt 2.0"
+  const lines = text.split('\n');
+  const lowered = labelVariants.map((l) => l.toLowerCase());
+
+  for (const line of lines) {
+    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab));
+    if (idx >= 0) {
+      const raw = line.split(':').slice(1).join(':').trim();
+      if (raw) return raw;
+    }
+  }
+  return undefined;
+}
+
+function detectStandardSet(text: string): EpdSetType {
+  const t = text.toLowerCase();
+  // in jouw PDF staat letterlijk “Resultaten Milieu-impact SBK set 1” 
+  if (t.includes('sbk set 1') || t.includes('en 15804+a1') || t.includes('en15804+a1') || t.includes('+a1')) {
+    return 'SBK_SET_1';
+  }
+  if (t.includes('sbk set 2') || t.includes('en 15804+a2') || t.includes('en15804+a2') || t.includes('+a2')) {
+    return 'SBK_SET_2';
+  }
+  return 'UNKNOWN';
+}
+
+// -------------- PCR normalisatie --------------
+function normalizePcr(pcrRaw: string | undefined): { pcrName?: string; version?: string; canonical?: string } {
+  if (!pcrRaw) return {};
+
+  const raw = pcrRaw.replace(/\s+/g, ' ').trim();
+
+  // Voorbeelden die we in jouw tekst zien:
+  // - "PCR-asfalt versie 2.0"
+  // - "PCR:NL-PCR Asfalt 2.0"
+  // - "PCR Asfalt 2.0"
+  const lowered = raw.toLowerCase();
+
+  // probeer versie te vinden (2.0, 1.1, etc)
+  const v = raw.match(/(\d+(?:\.\d+){0,2})/)?.[1];
+
+  // probeer naam te normaliseren
+  let name: string | undefined;
+
+  if (lowered.includes('nl-pcr') && lowered.includes('asfalt')) name = 'NL-PCR Asfalt';
+  else if (lowered.includes('pcr') && lowered.includes('asfalt')) name = 'PCR Asfalt';
+  else if (lowered.includes('asfalt')) name = 'Asfalt';
+  else {
+    // fallback: strip "PCR" en "versie"
+    name = raw
+      .replace(/pcr[:\s]*/i, '')
+      .replace(/versie/gi, '')
+      .replace(/\d+(?:\.\d+){0,2}/g, '')
+      .trim();
+    if (!name) name = undefined;
+  }
+
+  const canonical = name && v ? `${name} ${v}` : name || (v ? `PCR ${v}` : undefined);
+  return { pcrName: name, version: v, canonical };
+}
+
+// -------------- impact tabellen parsing --------------
+type ParsedTableRow = {
+  indicator: string;
+  unit: string;
+  values: Record<EpdImpactStage, number>;
+};
+
+function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableRow[] {
+  // We zoeken een blok dat start met:
+  // "Resultaten Milieu-impact SBK set 1"
+  // In jouw PDF staat dat letterlijk met daarna "Eenheid A1 A2 A3 A1-A3 D Totaal" 
+  const setLabel = setType === 'SBK_SET_2' ? 'SBK set 2' : 'SBK set 1';
+  const lines = text.split('\n');
+
+  const startIdx = lines.findIndex((l) => l.toLowerCase().includes('resultaten') && l.toLowerCase().includes(setLabel.toLowerCase()));
+  if (startIdx < 0) return [];
+
+  // neem een “venster” na start; stop als we een nieuwe grote sectie zien
+  const window = lines.slice(startIdx, startIdx + 220);
+
+  // We willen rows herkennen als:
+  // "MKI Euro 3,655E+0 7,058E-1 1,520E+0 5,881E+0 -2,198E+0 3,683E+0"
+  // of
+  // "GWP kg CO2-eq 2,840E+1 6,419E+0 2,131E+1 5,612E+1 -1,664E+1 3,948E+1"
+  //
+  // Omdat pdf-parse soms dingen aan elkaar plakt, doen we:
+  // - collapse dubbele spaties in elke regel (hebben we al)
+  // - als een regel “te kort” is maar lijkt op een indicator, probeer samen te voegen met volgende regel
+  const merged: string[] = [];
+  for (let i = 0; i < window.length; i++) {
+    const cur = window[i].trim();
+    if (!cur) continue;
+
+    // stopcondities: volgende secties die niet meer “impact” zijn
+    const low = cur.toLowerCase();
+    if (
+      i > 10 &&
+      (low.startsWith('gebruik van grondstoffen') ||
+        low.startsWith('output stromen') ||
+        low.startsWith('verklaring van vertrouwelijkheid') ||
+        low.includes('ecochain technologies'))
+    ) {
+      break;
+    }
+
+    // merge heuristiek: als regel geen cijfers heeft maar volgende wel
+    const hasNumber = /[\d]/.test(cur);
+    if (!hasNumber && window[i + 1] && /[\d]/.test(window[i + 1])) {
+      merged.push(`${cur} ${window[i + 1].trim()}`);
+      i++;
+      continue;
+    }
+    merged.push(cur);
+  }
+
+  const rows: ParsedTableRow[] = [];
+
+  // indicator tokens (deze lijst kun je uitbreiden; maar werkt al voor jouw “core + NMD set”)
+  const knownIndicators = [
+    'MKI',
+    'ADPE',
+    'ADPF',
+    'GWP',
+    'ODP',
+    'POCP',
+    'AP',
+    'EP',
+    'HTP',
+    'FAETP',
+    'MAETP',
+    'TETP',
+    'PERE',
+    'PERM',
+    'PERT',
+    'PENRE',
+    'PENRM',
+    'PENRT',
+    'PET',
+    'SM',
+    'RSF',
+    'NRSF',
+    'FW',
+    'HWD',
+    'NHWD',
+    'RWD',
+    'CRU',
+    'MFR',
+    'MER',
+    'EE',
+    'EET',
+    'EEE',
+  ];
+
+  for (const line of merged) {
+    // zoek of de regel begint met een indicator (exact)
+    const firstToken = line.split(' ')[0]?.trim();
+    if (!firstToken || !knownIndicators.includes(firstToken)) continue;
+
+    // Na indicator volgt unit, daarna 5 waarden (A1 A2 A3 A1-A3 D) en vaak ook “Totaal”
+    // We nemen de eerste 5 numerieke waarden na unit.
+    // Unit kan bestaan uit meerdere tokens: bv "kg CO2 -eq" in jouw tekst 
+    const tokens = line.split(' ').filter(Boolean);
+
+    // Vind index van eerste token dat op een getal lijkt
+    const firstNumIdx = tokens.findIndex((t) => /[\d]/.test(t) && /[0-9]/.test(t));
+    if (firstNumIdx < 0) continue;
+
+    const indicator = tokens[0];
+    const unit = tokens.slice(1, firstNumIdx).join(' ').replace(/\s+/g, ' ').trim();
+
+    const numberTokens = tokens.slice(firstNumIdx);
+
+    // pak 5 waarden (A1, A2, A3, A1-A3, D) in volgorde.
+    const nums: number[] = [];
+    for (const t of numberTokens) {
+      const n = parseNumberLoose(t);
+      if (n !== undefined) nums.push(n);
+      if (nums.length >= 5) break;
+    }
+    if (nums.length < 3) continue; // te weinig betrouwbare cijfers
+
+    const values: Record<EpdImpactStage, number> = {} as any;
+    if (nums[0] !== undefined) values.A1 = nums[0];
+    if (nums[1] !== undefined) values.A2 = nums[1];
+    if (nums[2] !== undefined) values.A3 = nums[2];
+    if (nums[3] !== undefined) values.A1_A3 = nums[3];
+    if (nums[4] !== undefined) values.D = nums[4];
+
+    rows.push({ indicator, unit: unit || '', values });
+  }
+
+  return rows;
+}
+
+// -------------- main parse --------------
 export function parseEpd(raw: string): ParsedEpd {
-  const lineText = normalizeLines(raw);
-  const flatText = normalizeFlat(raw);
+  const text = normalizePreserveLines(raw);
 
   const parsed: ParsedEpd = {
     productName: undefined,
@@ -316,85 +273,105 @@ export function parseEpd(raw: string): ParsedEpd {
     publicationDate: undefined,
     expirationDate: undefined,
     verifierName: undefined,
-    standardSet: 'UNKNOWN',
+    standardSet: detectStandardSet(text),
     impacts: [],
   };
 
-  // --- Metadata: product / functional unit / producent ---
-  parsed.productName = matchFirst(flatText, [
-    /\bproduct\s*naam\s*[:\-]\s*([^|]+?)\s*(?:\bAdres:|\bContact:|\bPCR:|\bLCA\b|$)/i,
-    /\bproduct\s*name\s*[:\-]\s*([^|]+?)\s*(?:\bAddress:|\bContact:|\bPCR:|\bLCA\b|$)/i,
-  ]);
+  // 1) basisvelden (line-based voorkeur, omdat PDF vaak zo is opgebouwd)
+  // In jouw PDF zien we o.a. “Datum van publicatie: 28-11-2024” en “Einde geldigheid: 28-11-2029”. 
+  const publicationRaw =
+    getLineValue(text, ['Datum van publicatie', 'Publicatie datum', 'Publicatie']) ||
+    firstMatch(text, [/publicatie[:\s]*datum[:\s]*([^\n]+)/i]);
 
-  parsed.functionalUnit = matchFirst(flatText, [
-    /\bfunctionele\s*eenheid\s*[:\-]\s*([^|]+?)\s*(?:\bProducent:|\bProducer:|\bPCR:|\bLCA\b|$)/i,
-    /\bfunctional\s*unit\s*[:\-]\s*([^|]+?)\s*(?:\bProducer:|\bPCR:|\bLCA\b|$)/i,
-  ]);
+  const expirationRaw =
+    getLineValue(text, ['Einde geldigheid', 'Geldig tot', 'Expiration', 'Einde']) ||
+    firstMatch(text, [/einde\s*geldigheid[:\s]*([^\n]+)/i]);
 
-  parsed.producerName = matchFirst(flatText, [
-    /\bproducent\s*[:\-]\s*([^|]+?)\s*(?:\bAdres:|\bContact:|\bPCR:|\bLCA\b|$)/i,
-    /\bproducer\s*[:\-]\s*([^|]+?)\s*(?:\bAddress:|\bContact:|\bPCR:|\bLCA\b|$)/i,
-    // In jouw output zat "AsfaltNu Amsterdam" etc. Soms zit het in accountnaam; dit is een fallback.
-    /\baccount\s+([A-Za-z0-9 _\-]+?)\s*\(20\d{2}\)/i,
-  ]);
+  parsed.publicationDate = dateFromText(publicationRaw || '') || dateFromText(text);
+  parsed.expirationDate = dateFromText(expirationRaw || '');
 
-  parsed.lcaMethod = matchFirst(flatText, [
-    /\bLCA\s*standaard\s*[:\-]\s*([^|]+?)\s*(?:\bPCR:|\bStandaard database:|$)/i,
-    /\bBepalingsmethode\s*[:\-]\s*([^|]+?)\s*(?:\bPCR:|\bStandaard database:|$)/i,
-  ]);
+  // Verificateur / toetser
+  parsed.verifierName =
+    getLineValue(text, ['Verificateur', 'Toetser', 'Verifier']) ||
+    firstMatch(text, [/(verificateur|toetser|verifier)[:\s]*([^\n]+)/i].map((r) => new RegExp(r.source, r.flags))) ||
+    undefined;
 
-  parsed.pcrVersion = matchFirst(flatText, [
-    /\bPCR\s*[:\-]\s*([^|]+?)\s*(?:\bStandaard database:|\bExtern|$)/i,
-    /\bNL-PCR\s*Asfalt\s*([0-9.]+)/i,
-  ]);
+  // LCA standaard / methode
+  parsed.lcaMethod =
+    getLineValue(text, ['LCA standaard', 'LCA standaard:', 'LCA-methode', 'Bepalingsmethode']) ||
+    firstMatch(text, [/lca\s*standaard[:\s]*([^\n]+)/i, /bepalingsmethode[:\s]*([^\n]+)/i]);
 
-  parsed.databaseName = matchFirst(flatText, [
-    /\bStandaard\s*database\s*[:\-]\s*([^|]+?)\s*(?:\bExtern|$)/i,
-    /\bdatabase\s*[:\-]\s*([^|]+?)\s*(?:\bExtern|$)/i,
-  ]);
+  // Database
+  parsed.databaseName =
+    getLineValue(text, ['Standaard database', 'Database']) ||
+    firstMatch(text, [/standaard\s*database[:\s]*([^\n]+)/i, /database[:\s]*([^\n]+)/i]);
 
-  // publicatie / geldigheid
-  // Jouw tekst heeft: "Datum van publicatie:28-11-2024 Einde geldigheid:28-11-2029"
-  const pubCandidate =
-    matchFirst(flatText, [/\bdatum\s+van\s+publicatie\s*[:\-]\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})/i]) ||
-    matchFirst(flatText, [/\bpublicatie\s*[:\-]\s*datum\s*[:\-]\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})/i]) ||
-    dateFromTextLoose(flatText);
-  parsed.publicationDate = pubCandidate ? dateFromTextLoose(pubCandidate) : undefined;
+  // Producent / producentnaam
+  // In jouw output pakt hij nu te veel; daarom: alleen de “kortere” vorm uit een echte labelregel, of anders een nette fallback.
+  parsed.producerName =
+    getLineValue(text, ['Producent', 'Producer']) ||
+    firstMatch(text, [/^producent[:\s]*([^\n]{2,120})/im, /^producer[:\s]*([^\n]{2,120})/im]);
 
-  const expCandidate =
-    matchFirst(flatText, [/\beinde\s+geldigheid\s*[:\-]\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})/i]) ||
-    matchFirst(flatText, [/\bgeldigheid\s*[:\-]\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})/i]);
-  parsed.expirationDate = expCandidate ? dateFromTextLoose(expCandidate) : undefined;
+  // Productnaam & functionele eenheid
+  parsed.productName =
+    getLineValue(text, ['Productnaam', 'Product naam', 'Product name', 'Product']) ||
+    firstMatch(text, [/^product\s*naam[:\s]*([^\n]{2,160})/im, /^product\s*name[:\s]*([^\n]{2,160})/im]);
 
-  parsed.verifierName = matchFirst(flatText, [
-    /\bveri\s*ficateur\s*[:\-]\s*([^|]+?)\s*(?:“|\"|\bDe\b|$)/i, // in jouw output: "Veri cateur:Ruben van Gaalen"
-    /\bverificateur\s*[:\-]\s*([^|]+?)\s*(?:“|\"|\bDe\b|$)/i,
-    /\btoetser\s*[:\-]\s*([^|]+?)\s*(?:“|\"|\bDe\b|$)/i,
-  ]);
+  parsed.functionalUnit =
+    getLineValue(text, ['Functionele eenheid', 'Functional unit', 'Eenheid']) ||
+    firstMatch(text, [/^functionele\s*eenheid[:\s]*([^\n]{2,160})/im, /^functional\s*unit[:\s]*([^\n]{2,160})/im]);
 
-  parsed.standardSet = detectStandardSet(flatText);
+  // PCR (naam + versie normaliseren)
+  const pcrLine =
+    getLineValue(text, ['PCR', 'PCR:', 'PCR-asfalt versie', 'PCR-asfalt']) ||
+    firstMatch(text, [/pcr[:\s]*([^\n]+)/i, /pcr[-\s]*asfalt\s*versie[:\s]*([^\n]+)/i]);
 
-  // --- Impacts: parse tables ---
-  const impacts = parseImpactTables(lineText);
+  const pcrNorm = normalizePcr(pcrLine);
+  // Jij wilt “standaard” waarden (niet hele zinnen). Dus: canonical in pcrVersion opslaan.
+  parsed.pcrVersion = pcrNorm.canonical;
 
-  // Fallback: als table parsing niets oplevert, kun je later nog oude heuristics toevoegen.
-  parsed.impacts = impacts;
+  // 2) standaard set
+  parsed.standardSet = detectStandardSet(text);
 
-  // A1_A3 aanvullen als ontbreekt voor elke indicator & set die A1/A2/A3 heeft.
-  const indicatorsFound = Array.from(new Set((parsed.impacts as any[]).map((i) => i.indicator)));
-  const setsFound = Array.from(new Set((parsed.impacts as any[]).map((i) => i.setType)));
-  for (const setType of setsFound as EpdSetType[]) {
-    for (const ind of indicatorsFound as string[]) {
-      computeA1A3IfMissing(parsed.impacts, setType, ind);
+  // 3) impacts uit tabellen
+  const impacts: ParsedImpact[] = [];
+
+  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
+  for (const setType of setsToTry) {
+    const rows = parseImpactTableForSet(text, setType);
+    for (const row of rows) {
+      for (const stage of impactStages) {
+        const v = row.values[stage];
+        if (v === undefined) continue;
+        impacts.push({
+          indicator: row.indicator, // string (MKI, GWP, ADPE, ...)
+          setType,
+          stage,
+          value: v,
+          unit: row.unit || '',
+        } as any);
+      }
     }
   }
 
-  // Expiration fallback: +5 jaar
-  if (!parsed.expirationDate && parsed.publicationDate) {
-    const pub = new Date(parsed.publicationDate);
-    const exp = new Date(pub);
-    exp.setFullYear(exp.getFullYear() + 5);
-    parsed.expirationDate = exp.toISOString().slice(0, 10);
+  parsed.impacts = impacts;
+
+  // 4) geldigheid fallback: +5 jaar
+  if ((!parsed.expirationDate || parsed.expirationDate === '') && parsed.publicationDate) {
+    const pubDate = new Date(parsed.publicationDate);
+    if (!Number.isNaN(pubDate.getTime())) {
+      const exp = new Date(pubDate);
+      exp.setFullYear(exp.getFullYear() + 5);
+      parsed.expirationDate = exp.toISOString().slice(0, 10);
+    }
+  }
+
+  // 5) extra slimme fallback voor jouw type EPD:
+  // Als productName leeg blijft maar producent wél exact dat “ANA I - 2023 - ...” label is,
+  // dan is dat waarschijnlijk de project/EPD titel i.p.v. producent. In jouw output zie je dat hij nu daar belandt. 
+  // We laten producent staan, maar zetten productName dan ook op die titel (zodat je niet leeg blijft).
+  if (!parsed.productName && parsed.producerName && parsed.producerName.length <= 120 && /pcr/i.test(parsed.producerName)) {
+    parsed.productName = parsed.producerName;
   }
 
   return parsed;
