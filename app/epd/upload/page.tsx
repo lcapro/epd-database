@@ -247,14 +247,14 @@ export default function UploadPage() {
       .map(([key, value]) => {
         const [indicator, setType, stage] = key.split('|');
         return {
-          indicator,
-          setType: setType as EpdSetType,
-          stage: stage as EpdImpactStage,
+          indicator: indicator ?? '',
+          setType: (setType ?? 'UNKNOWN') as EpdSetType,
+          stage: (stage ?? 'A1') as EpdImpactStage,
           value: Number(value),
-          // @ts-expect-error: unit toevoegen in types stap 2/3
-          unit: impactUnits[indicator] || ''
+          unit: impactUnits[indicator] || '',
         };
       });
+
 
     const customAttributes = customFields.reduce<Record<string, string>>((acc, cur) => {
       if (cur.key) acc[cur.key] = cur.value;
