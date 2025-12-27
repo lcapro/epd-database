@@ -34,14 +34,15 @@ export interface EpdRecord {
   lca_method?: string | null;
   pcr_version?: string | null;
   database_name?: string | null;
-  databaseNmdVersion?: string;
-  databaseEcoinventVersion?: string;
+  database_nmd_version?: string | null;
+  database_ecoinvent_version?: string | null;
   publication_date?: string | null;
   expiration_date?: string | null;
   verifier_name?: string | null;
   standard_set: EpdSetType;
   custom_attributes: Record<string, string>;
 }
+
 
 export interface EpdImpactRecord {
   id: string;
