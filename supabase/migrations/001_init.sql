@@ -17,6 +17,8 @@ create table if not exists epds (
   lca_method text,
   pcr_version text,
   database_name text,
+  database_nmd_version text,
+  database_ecoinvent_version text,
   publication_date date,
   expiration_date date,
   verifier_name text,
