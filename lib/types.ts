@@ -16,8 +16,8 @@ export interface ParsedEpd {
   lcaMethod?: string;
   pcrVersion?: string;
   databaseName?: string;
-  database_nmd_version?: string | null;
-  database_ecoinvent_version?: string | null;
+  databaseNmdVersion?: string;
+  databaseEcoinventVersion?: string;
   publicationDate?: string; // ISO date
   expirationDate?: string; // ISO date
   verifierName?: string;
