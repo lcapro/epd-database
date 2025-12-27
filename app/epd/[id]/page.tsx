@@ -7,7 +7,7 @@ interface ApiResponse {
 }
 
 const fetchEpd = async (id: string) => {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/epd/${id}`, { cache: 'no-store' });
+  const res = await fetch(`/api/epd/${id}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Kan EPD niet laden');
   return res.json() as Promise<ApiResponse>;
 };
