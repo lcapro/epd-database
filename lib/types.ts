@@ -2,7 +2,7 @@ export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D';
 export type EpdSetType = 'SBK_SET_1' | 'SBK_SET_2' | 'UNKNOWN';
 
 export interface ParsedImpact {
-  indicator: 'MKI' | 'CO2';
+  indicator: string;
   setType: EpdSetType;
   stage: EpdImpactStage;
   value: number;
@@ -41,7 +41,7 @@ export interface EpdRecord {
 export interface EpdImpactRecord {
   id: string;
   epd_id: string;
-  indicator: 'MKI' | 'CO2';
+  indicator: string;
   set_type: EpdSetType;
   stage: EpdImpactStage;
   value: number | null;
