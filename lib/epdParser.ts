@@ -48,7 +48,7 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
   const lowered = labelVariants.map((l) => l.toLowerCase());
 
   for (const line of lines) {
-    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab));
+    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab.toLowerCase()));
     if (idx >= 0) {
       const raw = line.split(':').slice(1).join(':').trim();
       if (raw) return raw;
@@ -57,7 +57,7 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
   return undefined;
 }
 
-// -------- PCR normalisatie (zoals je al wil) --------
+// -------- PCR normalisatie --------
 function normalizePcr(pcrRaw: string | undefined): { canonical?: string } {
   if (!pcrRaw) return {};
   const raw = pcrRaw.replace(/\s+/g, ' ').trim();
@@ -86,13 +86,11 @@ function normalizeLcaMethod(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const s = raw.replace(/\s+/g, ' ').trim();
 
-  // Pak versie uit "Bepalingsmethode 1.1 (2022)" of "Bepalingsmethode Milieuprestatie Bouwwerken versie 1.1"
   const version =
     s.match(/bepalingsmethode[^0-9]*?(\d+(?:\.\d+){0,2})/i)?.[1] ||
     s.match(/versie\s*(\d+(?:\.\d+){0,2})/i)?.[1];
 
   if (version) return `NMD Bepalingsmethode ${version}`;
-  // fallback: als het al NMD bevat maar geen versie: maak hem consistent
   if (/bepalingsmethode/i.test(s)) return 'NMD Bepalingsmethode';
   return s;
 }
@@ -103,11 +101,11 @@ function normalizeDatabases(raw: string | undefined): { canonical?: string; nmd?
   const s = raw.replace(/\s+/g, ' ').trim();
 
   const nmdV =
-    s.match(/nationale milieudatabase\s*v?(\d+(?:\.\d+){0,2})/i)?.[1] ||
+    s.match(/nationale\s+milieudatabase\s*v?(\d+(?:\.\d+){0,2})/i)?.[1] ||
     s.match(/\bnmd\b.*?v?(\d+(?:\.\d+){0,2})/i)?.[1];
 
   const ecoV =
-    s.match(/ecoinvent\s*v?(\d+(?:\.\d+){0,2})/i)?.[1] ||
+    s.match(/\becoinvent\b\s*v?(\d+(?:\.\d+){0,2})/i)?.[1] ||
     s.match(/\bobv\s*ecoinvent\s*v?(\d+(?:\.\d+){0,2})/i)?.[1];
 
   const nmd = nmdV ? `NMD v${nmdV}` : undefined;
@@ -130,7 +128,7 @@ function detectStandardSet(text: string): EpdSetType {
   return 'UNKNOWN';
 }
 
-// -------- impact parsing (zoals je al had) --------
+// -------- impact parsing --------
 type ParsedTableRow = {
   indicator: string;
   unit: string;
@@ -185,7 +183,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
     if (!firstToken || !knownIndicators.includes(firstToken)) continue;
 
     const tokens = line.split(' ').filter(Boolean);
-    const firstNumIdx = tokens.findIndex((t) => /[\d]/.test(t) && /[0-9]/.test(t));
+    const firstNumIdx = tokens.findIndex((t) => /[\d]/.test(t));
     if (firstNumIdx < 0) continue;
 
     const indicator = tokens[0];
@@ -249,7 +247,7 @@ export function parseEpd(raw: string): ParsedEpd {
   // publicatie/geldigheid
   const publicationRaw =
     getLineValue(text, ['Datum van publicatie', 'Publicatie datum', 'Publicatie']) ||
-    firstMatch(text, [/publicatie[:\s]*datum[:\s]*([^\n]+)/i]);
+    firstMatch(text, [/datum\s+van\s+publicatie\s*[:\s]*([^\n]+)/i, /publicatie[:\s]*datum[:\s]*([^\n]+)/i]);
 
   const expirationRaw =
     getLineValue(text, ['Einde geldigheid', 'Geldig tot', 'Expiration']) ||
@@ -258,33 +256,27 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.publicationDate = dateFromText(publicationRaw || '') || dateFromText(text);
   parsed.expirationDate = dateFromText(expirationRaw || '');
 
-  // ---- Verificateur: fix voor "Veri cateur:Ruben van Gaalen" / "Veriﬁcateur" etc.
-  // We zoeken in hele tekst, niet alleen line-start.
+  // ---- Verificateur: robuust voor "Veri cateur:Ruben van Gaalen"
   const verifier =
-    getLineValue(text, ['Verificateur', 'Toetser', 'Verifier']) ||
+    getLineValue(text, ['Verificateur', 'Verifier', 'Toetser']) ||
     firstMatch(text, [
-      // verificateur/verifier/toetser:
       /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,80})/i,
-      // pdf-parse split soms: "Veri cateur"
-      /veri\s*f(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([^\n]{2,80})/i,
-      // soms staat het in zin met naam na dubbelepunt zonder newline
-      /veri\s*f(?:i|î|ï)?\s*cateu?r\s*:\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,80})/,
+      /veri\s*f\s*i?\s*cateu?r\s*[:\-]\s*([^\n]{2,80})/i, // "Veri cateur"
+      /veri\s*f\s*i?\s*cateu?r\s*:\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,80})/,
     ]);
-
   parsed.verifierName = verifier;
 
   // LCA methode: normaliseren
   const lcaRaw =
     getLineValue(text, ['LCA standaard', 'LCA-methode', 'Bepalingsmethode']) ||
     firstMatch(text, [/lca\s*standaard[:\s]*([^\n]+)/i, /bepalingsmethode[:\s]*([^\n]+)/i]);
-
   parsed.lcaMethod = normalizeLcaMethod(lcaRaw);
 
-  // PCR: normaliseren (zoals je wil)
-  const pcrLine =
-    getLineValue(text, ['PCR', 'PCR:']) ||
-    firstMatch(text, [/pcr[:\s]*([^\n]+)/i, /pcr[-\s]*asfalt\s*versie[:\s]*([^\n]+)/i]);
-  parsed.pcrVersion = normalizePcr(pcrLine).canonical;
+  // PCR: normaliseren
+  const pcrRaw =
+    firstMatch(text, [/pcr[:\s]*([^\n]+)/i]) ||
+    getLineValue(text, ['PCR', 'PCR:']);
+  parsed.pcrVersion = normalizePcr(pcrRaw).canonical;
 
   // Database: normaliseren + split NMD/EcoInvent
   const dbRaw =
@@ -296,20 +288,19 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.databaseNmdVersion = dbNorm.nmd;
   parsed.databaseEcoinventVersion = dbNorm.ecoinvent;
 
-  // sets
-  parsed.standardSet = detectStandardSet(text);
-
-  // impacts uit tabellen
+  // impacts
   const impacts: ParsedImpact[] = [];
   const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
+
   for (const setType of setsToTry) {
     const rows = parseImpactTableForSet(text, setType);
     for (const row of rows) {
       for (const stage of impactStages) {
         const v = row.values[stage];
         if (v === undefined) continue;
+
         impacts.push({
-          indicator: row.indicator,
+          indicator: row.indicator as any,
           setType: setType as any,
           stage,
           value: v,
@@ -318,14 +309,15 @@ export function parseEpd(raw: string): ParsedEpd {
       }
     }
   }
+
   parsed.impacts = impacts;
 
-  // als beide tabellen echt gevonden zijn: zet op BOTH (extra zekerheid)
+  // extra zekerheid: als beide sets impacts bevatten -> BOTH
   const hasSet1 = parsed.impacts.some((i) => i.setType === 'SBK_SET_1');
   const hasSet2 = parsed.impacts.some((i) => i.setType === 'SBK_SET_2');
   if (hasSet1 && hasSet2) parsed.standardSet = 'SBK_BOTH';
 
-  // geldigheid fallback
+  // geldigheid fallback +5 jaar
   if ((!parsed.expirationDate || parsed.expirationDate === '') && parsed.publicationDate) {
     const pubDate = new Date(parsed.publicationDate);
     if (!Number.isNaN(pubDate.getTime())) {
