@@ -22,7 +22,8 @@ const stages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 const sets: { value: EpdSetType; label: string }[] = [
   { value: 'UNKNOWN', label: 'Onbekend' },
   { value: 'SBK_SET_1', label: 'SBK set 1 (+A1)' },
-  { value: 'SBK_SET_2', label: 'SBK set 2 (+A2)' }
+  { value: 'SBK_SET_2', label: 'SBK set 2 (+A2)' },
+  { value: 'SBK_BOTH', label: 'Beide sets (A1 + A2)' },
 ];
 
 /**
