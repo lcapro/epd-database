@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       set_type: impact.setType,
       stage: impact.stage,
       value: impact.value,
+      unit: impact.unit ?? null,
     }));
 
     const { error: impactError } = await admin.from('epd_impacts').insert(mapped);
