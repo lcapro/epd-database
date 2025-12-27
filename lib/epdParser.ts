@@ -224,6 +224,8 @@ export function parseEpd(raw: string): ParsedEpd {
     lcaMethod: undefined,
     pcrVersion: undefined,
     databaseName: undefined,
+    databaseNmdVersion: undefined,
+    databaseEcoinventVersion: undefined,
     publicationDate: undefined,
     expirationDate: undefined,
     verifierName: undefined,
@@ -291,6 +293,8 @@ export function parseEpd(raw: string): ParsedEpd {
 
   const dbNorm = normalizeDatabases(dbRaw);
   parsed.databaseName = dbNorm.canonical;
+  parsed.databaseNmdVersion = dbNorm.nmd;
+  parsed.databaseEcoinventVersion = dbNorm.ecoinvent;
 
   // sets
   parsed.standardSet = detectStandardSet(text);
