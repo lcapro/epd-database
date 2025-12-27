@@ -247,7 +247,6 @@ export default function UploadPage() {
       .map(([key, value]) => {
         const [indicator, setType, stage] = key.split('|');
         return {
-          // @ts-expect-error: jouw types moeten hiervoor geüpdatet zijn in stap 2/3
           indicator,
           setType: setType as EpdSetType,
           stage: stage as EpdImpactStage,
