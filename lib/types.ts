@@ -3,6 +3,7 @@ export type EpdSetType = 'SBK_SET_1' | 'SBK_SET_2' | 'UNKNOWN';
 
 export interface ParsedImpact {
   indicator: string;
+  unit?: string; 
   setType: EpdSetType;
   stage: EpdImpactStage;
   value: number;
@@ -45,4 +46,5 @@ export interface EpdImpactRecord {
   set_type: EpdSetType;
   stage: EpdImpactStage;
   value: number | null;
+  unit?: string; 
 }
