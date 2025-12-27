@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     lcaMethod,
     pcrVersion,
     databaseName,
+    databaseNmdVersion,
+    databaseEcoinventVersion,
     publicationDate,
     expirationDate,
     verifierName,
@@ -26,6 +28,8 @@ export async function POST(request: Request) {
     lcaMethod?: string;
     pcrVersion?: string;
     databaseName?: string;
+    databaseNmdVersion?: string;
+    databaseEcoinventVersion?: string;
     publicationDate?: string;
     expirationDate?: string;
     verifierName?: string;
