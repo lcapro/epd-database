@@ -34,6 +34,8 @@ export interface EpdRecord {
   lca_method?: string | null;
   pcr_version?: string | null;
   database_name?: string | null;
+  databaseNmdVersion?: string;
+  databaseEcoinventVersion?: string;
   publication_date?: string | null;
   expiration_date?: string | null;
   verifier_name?: string | null;
