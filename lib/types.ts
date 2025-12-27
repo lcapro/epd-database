@@ -1,5 +1,5 @@
 export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D';
-export type EpdSetType = 'SBK_SET_1' | 'SBK_SET_2' | 'UNKNOWN';
+export type EpdSetType = 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH' | 'UNKNOWN';
 
 export interface ParsedImpact {
   indicator: string;
