@@ -80,6 +80,8 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
           <div><strong>LCA-methode:</strong> {epd.lca_method || '-'}</div>
           <div><strong>PCR-versie:</strong> {epd.pcr_version || '-'}</div>
           <div><strong>Database:</strong> {epd.database_name || '-'}</div>
+          <div><strong>NMD database:</strong> {epd.database_nmd_version || '-'}</div>
+          <div><strong>EcoInvent:</strong> {epd.database_ecoinvent_version || '-'}</div>
           <div><strong>Publicatie:</strong> {epd.publication_date || '-'}</div>
           <div><strong>Geldigheid:</strong> {epd.expiration_date || '-'}</div>
           <div><strong>Toetser/verificateur:</strong> {epd.verifier_name || '-'}</div>
