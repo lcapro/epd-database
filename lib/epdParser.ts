@@ -144,9 +144,8 @@ const knownIndicators = new Set([
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
-// matches scientific notation with comma decimals: 3,655E+0 , also simple 0 or 000000
-const NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/g;
-const FIRST_NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/;
+// matches scientific notation with comma/dot decimals: 3,655E+0 or 3.655E+0
+const NUM_RE = /[+-]?\d+(?:[.,]\d+)?(?:E[+-]?\d+)?/gi;
 
 function parseNumberToken(tok: string): number | undefined {
   const t = tok.trim();
@@ -158,6 +157,40 @@ function parseNumberToken(tok: string): number | undefined {
   const normalized = t.replace(',', '.');
   const n = Number(normalized);
   return Number.isFinite(n) ? n : undefined;
+}
+
+function isAlpha(ch: string | undefined): boolean {
+  if (!ch) return false;
+  return /[a-z]/i.test(ch);
+}
+
+function shouldAcceptToken(text: string, start: number, end: number): boolean {
+  const prev = text[start - 1];
+  const next = text[end];
+  const next2 = text[end + 1];
+
+  if (isAlpha(prev)) return false;
+  if (isAlpha(next)) return false;
+  if (next === '-' && isAlpha(next2)) return false;
+  return true;
+}
+
+function extractNumberTokens(text: string): string[] {
+  const tokens: string[] = [];
+  const re = new RegExp(NUM_RE.source, 'gi');
+  let match = re.exec(text);
+  while (match) {
+    const token = match[0];
+    if (token) {
+      const index = match.index ?? 0;
+      const end = index + token.length;
+      if (shouldAcceptToken(text, index, end)) {
+        tokens.push(token);
+      }
+    }
+    match = re.exec(text);
+  }
+  return tokens;
 }
 
 /**
@@ -242,14 +275,28 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     // maak unit+numbers één string, maar behoud spaties
     const compact = rest.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
 
-    const m = compact.match(FIRST_NUM_RE);
-    if (!m || m.index === undefined) continue;
+    let firstIndex: number | undefined;
+    const firstRe = new RegExp(NUM_RE.source, 'gi');
+    let firstMatch = firstRe.exec(compact);
+    while (firstMatch) {
+      const token = firstMatch[0];
+      if (token) {
+        const index = firstMatch.index ?? 0;
+        const end = index + token.length;
+        if (shouldAcceptToken(compact, index, end)) {
+          firstIndex = index;
+          break;
+        }
+      }
+      firstMatch = firstRe.exec(compact);
+    }
+    if (firstIndex === undefined) continue;
 
-    const unitRaw = compact.slice(0, m.index).trim();
-    const numsRaw = compact.slice(m.index).trim();
+    const unitRaw = compact.slice(0, firstIndex).trim();
+    const numsRaw = compact.slice(firstIndex).trim();
 
     // extract numbers (A1 A2 A3 A1-A3 D Totaal) -> we nemen eerste 5
-    const tokens = numsRaw.match(NUM_RE) || [];
+    const tokens = extractNumberTokens(numsRaw);
     const nums: number[] = [];
     for (const t of tokens) {
       const n = parseNumberToken(t);
