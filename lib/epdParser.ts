@@ -1,6 +1,6 @@
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from './types';
 
-const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
+const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 
 /**
  * Normalisatie met behoud van regels (belangrijk voor tabellen),
@@ -11,7 +11,7 @@ function normalizeStage(stage: string): 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D' | nul
   if (s === 'A1') return 'A1';
   if (s === 'A2') return 'A2';
   if (s === 'A3') return 'A3';
-  if (s === 'A1-A3' || s === 'A1_A3') return 'A1-A3';
+  if (s === 'A1-A3' || s === 'A1_A3') return 'A1_A3';
   if (s === 'D') return 'D';
   return null;
 }
