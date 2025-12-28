@@ -1,6 +1,6 @@
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from './types';
 
-const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
+const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
 
 /**
  * Normalisatie met behoud van regels (belangrijk voor tabellen),
