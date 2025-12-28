@@ -5,7 +5,7 @@ export interface ExportEpdShape extends EpdRecord {
   impacts: EpdImpactRecord[];
 }
 
-const stages = ['A1', 'A2', 'A3', 'A1_A3', 'D'] as const;
+const stages = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
 const indicators = ['MKI', 'CO2'] as const;
 const sets = ['SBK_SET_1', 'SBK_SET_2'] as const;
 

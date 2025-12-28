@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { EpdImpactRecord, EpdRecord } from '@/lib/types';
 
-const STAGES = ['A1', 'A2', 'A3', 'A1_A3', 'D'] as const;
+const STAGES = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
 
 type Props = {
   epd: EpdRecord & { storage_path?: string | null };
