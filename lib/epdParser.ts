@@ -235,21 +235,25 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
   const lines = text.split('\n');
   const textLower = text.toLowerCase();
   const headerIndices: number[] = [];
+  const hasSet1 = includesPattern(textLower, setHeaderPatterns.SBK_SET_1);
+  const hasSet2 = includesPattern(textLower, setHeaderPatterns.SBK_SET_2);
 
   for (let i = 0; i < lines.length; i++) {
     const combined = [lines[i], lines[i + 1], lines[i + 2]].filter(Boolean).join(' ');
     if (!includesPattern(combined, sectionHeaderPatterns)) continue;
 
     const hasSetMatch = includesPattern(combined, setHeaderPatterns[setType]);
-    const mentionSet1 = includesPattern(textLower, setHeaderPatterns.SBK_SET_1);
-    const mentionSet2 = includesPattern(textLower, setHeaderPatterns.SBK_SET_2);
     const allowFallback =
-      (setType === 'SBK_SET_1' && !mentionSet2) || (setType === 'SBK_SET_2' && !mentionSet1);
+      (setType === 'SBK_SET_1' && !hasSet2) || (setType === 'SBK_SET_2' && !hasSet1);
 
     if (hasSetMatch || allowFallback) headerIndices.push(i);
   }
 
-  if (!headerIndices.length) return [];
+  if (!headerIndices.length) {
+    if (setType === 'SBK_SET_1' && hasSet2 && !hasSet1) return [];
+    if (setType === 'SBK_SET_2' && hasSet1 && !hasSet2) return [];
+    headerIndices.push(0);
+  }
 
   const rows: ParsedTableRow[] = [];
 
@@ -269,28 +273,42 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
 
       const hasNumber = /[0-9]/.test(cur);
       const next = (window[i + 1] || '').trim();
+      const nextNext = (window[i + 2] || '').trim();
 
       if (!hasNumber && next && /[0-9]/.test(next)) {
         merged.push(`${cur} ${next}`);
         i++;
         continue;
       }
+      if (!hasNumber && next && nextNext && /[0-9]/.test(nextNext)) {
+        merged.push(`${cur} ${next} ${nextNext}`);
+        i += 2;
+        continue;
+      }
       merged.push(cur);
     }
 
     for (const line of merged) {
-      const firstToken = line.split(' ')[0]?.trim();
-      const indicator = firstToken ? normalizeIndicatorToken(firstToken) : null;
-      if (!indicator) continue;
-
       const tokens = line.split(' ').filter(Boolean);
 
       // Zoek eerste token met cijfers
       const firstNumIdx = tokens.findIndex((t) => /[0-9]/.test(t));
       if (firstNumIdx < 0) continue;
 
+      const indicatorIdx = tokens
+        .slice(0, firstNumIdx)
+        .findIndex((token) => normalizeIndicatorToken(token));
+      if (indicatorIdx < 0) continue;
+
+      const indicator = normalizeIndicatorToken(tokens[indicatorIdx]);
+      if (!indicator) continue;
+
       // unit zit tussen indicator en eerste nummer (kan "kg CO2-eq" etc. zijn)
-      const unit = tokens.slice(1, firstNumIdx).join(' ').replace(/\s+/g, ' ').trim();
+      const unit = tokens
+        .slice(indicatorIdx + 1, firstNumIdx)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
       const numberTokens = tokens.slice(firstNumIdx);
 
@@ -403,7 +421,12 @@ export function parseEpd(raw: string): ParsedEpd {
   // impacts uit tabellen
   const impacts: ParsedImpact[] = [];
 
-  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
+  const setsToTry: EpdSetType[] =
+    parsed.standardSet === 'SBK_SET_1'
+      ? ['SBK_SET_1']
+      : parsed.standardSet === 'SBK_SET_2'
+      ? ['SBK_SET_2']
+      : ['SBK_SET_1', 'SBK_SET_2'];
   for (const setType of setsToTry) {
     const rows = parseImpactTableForSet(text, setType);
 
