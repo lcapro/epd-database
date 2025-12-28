@@ -6,6 +6,16 @@ const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
  * Normalisatie met behoud van regels (belangrijk voor tabellen),
  * maar wel opgeschoonde whitespace per regel.
  */
+function normalizeStage(stage: string): 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D' | null {
+  const s = stage.trim().toUpperCase();
+  if (s === 'A1') return 'A1';
+  if (s === 'A2') return 'A2';
+  if (s === 'A3') return 'A3';
+  if (s === 'A1-A3' || s === 'A1_A3') return 'A1_A3';
+  if (s === 'D') return 'D';
+  return null;
+}
+
 function normalizePreserveLines(input: string): string {
   return input
     .replace(/\r\n/g, '\n')
@@ -342,14 +352,16 @@ export function parseEpd(raw: string): ParsedEpd {
         const v = row.values[stage];
         if (v === undefined) continue;
 
-        // ParsedImpact in jouw project accepteert indicator als string + unit
-        impacts.push({
-          indicator: row.indicator,
-          setType,
-          stage,
-          value: v,
-          unit: row.unit || '',
-        } as any);
+      const normalizedStage = normalizeStage(stage);
+      if (!normalizedStage) continue;
+      
+      impacts.push({
+        indicator: row.indicator,
+        setType: setType as any,
+        stage: normalizedStage,
+        value: v,
+        unit: row.unit || '',
+      });
       }
     }
   }
