@@ -5,7 +5,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
 import { ALL_INDICATOR_CODES, IMPACT_INDICATORS, isKnownIndicator, ImpactIndicatorCode } from '@/lib/impactIndicators';
 
-const stages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
+const stages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 
 const sets: { value: EpdSetType; label: string }[] = [
   { value: 'UNKNOWN', label: 'Onbekend' },
