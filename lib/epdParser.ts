@@ -1,21 +1,11 @@
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from './types';
 
-const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
+const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
 
 /**
  * Normalisatie met behoud van regels (belangrijk voor tabellen),
  * maar wel opgeschoonde whitespace per regel.
  */
-function normalizeStage(stage: string): 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D' | null {
-  const s = stage.trim().toUpperCase();
-  if (s === 'A1') return 'A1';
-  if (s === 'A2') return 'A2';
-  if (s === 'A3') return 'A3';
-  if (s === 'A1-A3' || s === 'A1_A3') return 'A1_A3';
-  if (s === 'D') return 'D';
-  return null;
-}
-
 function normalizePreserveLines(input: string): string {
   return input
     .replace(/\r\n/g, '\n')
@@ -40,33 +30,13 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
   const lowered = labelVariants.map((l) => l.toLowerCase());
 
   for (const line of lines) {
-    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab));
+    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab.toLowerCase()));
     if (idx >= 0) {
       const raw = line.split(':').slice(1).join(':').trim();
       if (raw) return raw;
     }
   }
   return undefined;
-}
-
-function parseNumberLoose(value?: string | null): number | undefined {
-  if (!value) return undefined;
-  let v = value.replace(/\s+/g, '').trim();
-  v = v.replace(/[−–—]/g, '-');
-  v = v.replace(/[^0-9eE+\-.,]/g, '');
-
-  if (v.includes(',') && v.includes('.')) {
-    if (v.lastIndexOf(',') > v.lastIndexOf('.')) {
-      v = v.replace(/\./g, '').replace(',', '.');
-    } else {
-      v = v.replace(/,/g, '');
-    }
-  } else {
-    v = v.replace(',', '.');
-  }
-
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
 }
 
 function dateFromText(text: string): string | undefined {
@@ -130,26 +100,17 @@ function extractNmdVersionFromText(text: string): string | undefined {
 }
 
 function extractEcoinventVersionFromText(text: string): string | undefined {
-  // Kan zijn: "Ecoinvent\n3.6" of "Ecoinvent v3.6"
   const m =
-    text.match(/\becoinvent\b[\s\S]{0,40}?v?\s*([0-9]+(?:\.[0-9]+)*)/i) ||
-    text.match(/\bobv\s*ecoinvent\b[\s\S]{0,40}?v?\s*([0-9]+(?:\.[0-9]+)*)/i);
+    text.match(/\becoinvent\b[\s\S]{0,60}?v?\s*([0-9]+(?:\.[0-9]+)*)/i) ||
+    text.match(/\bobv\s*ecoinvent\b[\s\S]{0,60}?v?\s*([0-9]+(?:\.[0-9]+)*)/i);
   return m?.[1];
 }
 
-function normalizeDatabases(raw: string | undefined, fullText: string): { canonical?: string; nmd?: string; ecoinvent?: string } {
-  if (!raw) {
-    // fallback: toch proberen uit hele tekst
-    const nmdV = extractNmdVersionFromText(fullText);
-    const ecoV = extractEcoinventVersionFromText(fullText);
-    return {
-      canonical: undefined,
-      nmd: nmdV ? `NMD v${nmdV}` : undefined,
-      ecoinvent: ecoV ? `EcoInvent v${ecoV}` : undefined,
-    };
-  }
-
-  const s = raw.replace(/\s+/g, ' ').trim();
+function normalizeDatabases(
+  raw: string | undefined,
+  fullText: string
+): { canonical?: string; nmd?: string; ecoinvent?: string } {
+  const s = (raw || '').replace(/\s+/g, ' ').trim();
 
   const nmdV = extractNmdVersionFromText(s) || extractNmdVersionFromText(fullText);
   const ecoV = extractEcoinventVersionFromText(s) || extractEcoinventVersionFromText(fullText);
@@ -158,7 +119,7 @@ function normalizeDatabases(raw: string | undefined, fullText: string): { canoni
   const ecoinvent = ecoV ? `EcoInvent v${ecoV}` : undefined;
 
   const parts = [nmd, ecoinvent].filter(Boolean);
-  const canonical = parts.length ? parts.join(' | ') : s;
+  const canonical = parts.length ? parts.join(' | ') : (s || undefined);
 
   return { canonical, nmd, ecoinvent };
 }
@@ -174,12 +135,7 @@ function detectStandardSet(text: string): EpdSetType {
   return 'UNKNOWN';
 }
 
-// -------- impact parsing --------
-type ParsedTableRow = {
-  indicator: string;
-  unit: string;
-  values: Partial<Record<EpdImpactStage, number>>;
-};
+// ---------------- IMPACT PARSING (ROBUST) ----------------
 
 const knownIndicators = new Set([
   'MKI','ADPE','ADPF','GWP','ODP','POCP','AP','EP','HTP','FAETP','MAETP','TETP',
@@ -187,152 +143,117 @@ const knownIndicators = new Set([
   'HWD','NHWD','RWD','CRU','MFR','MER','EE','EET','EEE',
 ]);
 
-const indicatorAliases: Record<string, string> = {
-  GWPTOTAL: 'GWP',
-  CO2: 'GWP',
-  CO2EQ: 'GWP',
-};
+// matches scientific notation with comma decimals: 3,655E+0 , also simple 0 or 000000
+const NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/g;
+const FIRST_NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/;
 
-function normalizeIndicatorToken(token: string): string | null {
-  const cleaned = token.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  if (!cleaned) return null;
-  if (knownIndicators.has(cleaned)) return cleaned;
-  if (cleaned.startsWith('GWP')) return 'GWP';
-  if (indicatorAliases[cleaned]) return indicatorAliases[cleaned];
-  return null;
-}
+function parseNumberToken(tok: string): number | undefined {
+  const t = tok.trim();
+  if (!t) return undefined;
 
-const sectionHeaderPatterns = [
-  /milieu[-\s]*impact/i,
-  /environmental\s+impact/i,
-  /gebruik\s+van\s+grondstoffen/i,
-  /resource\s+use/i,
-  /use\s+of\s+resources/i,
-  /afval/i,
-  /waste\s+categor/i,
-  /uitgaande\s+stromen/i,
-  /output\s+flows?/i,
-];
+  // handle "000000" style
+  if (/^0+$/.test(t)) return 0;
 
-const setHeaderPatterns: Record<EpdSetType, RegExp[]> = {
-  SBK_SET_1: [/sbk\s*set\s*1/i, /en\s*15804\s*\+?\s*a1/i, /en15804\s*\+?\s*a1/i],
-  SBK_SET_2: [/sbk\s*set\s*2/i, /en\s*15804\s*\+?\s*a2/i, /en15804\s*\+?\s*a2/i],
-  SBK_BOTH: [],
-  UNKNOWN: [],
-};
-
-function includesPattern(text: string, patterns: RegExp[]): boolean {
-  return patterns.some((p) => p.test(text));
+  const normalized = t.replace(',', '.');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /**
- * Vindt de tabel op basis van de daadwerkelijke headerregel:
- * "Milieu-impact SBK set 1 ..." of "Milieu-impact SBK set 2 ..."
- *
- * In jouw PDF staat "Resultaten" vaak op een aparte regel, daarom niet daarop matchen.
+ * Pak de “Resultaten -> Milieu-impact SBK set X ...” sectie als substring,
+ * zodat we NIET per ongeluk de definities (EET=...) pakken.
  */
-function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableRow[] {
-  const lines = text.split('\n');
-  const textLower = text.toLowerCase();
-  const headerIndices: number[] = [];
-  const hasSet1 = includesPattern(textLower, setHeaderPatterns.SBK_SET_1);
-  const hasSet2 = includesPattern(textLower, setHeaderPatterns.SBK_SET_2);
+function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {
+  const startRe = new RegExp(`milieu-?impact\\s*sbk\\s*set\\s*${setNo}`, 'i');
+  const startIdx = text.search(startRe);
+  if (startIdx < 0) return undefined;
 
+  // eindigt meestal bij "Ecochain Technologies" footer
+  const endIdxCandidates = [
+    text.toLowerCase().indexOf('ecochain technologies', startIdx),
+    text.toLowerCase().indexOf('h.j.e.', startIdx),
+  ].filter((x) => x >= 0);
+
+  const endIdx = endIdxCandidates.length ? Math.min(...endIdxCandidates) : Math.min(text.length, startIdx + 12000);
+  return text.slice(startIdx, endIdx);
+}
+
+/**
+ * Bouw “records” per indicator door regels te groeperen:
+ * - soms staat indicator op eigen regel (GWP) en unit op volgende regels
+ * - soms zit alles op 1 regel zonder spaties tussen unit en getallen (MKIEuro3,655E+0...)
+ */
+function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator: string; unit: string; nums: number[] }[] {
+  const setNo: '1' | '2' = setType === 'SBK_SET_2' ? '2' : '1';
+  const section = sliceResultsSection(text, setNo);
+  if (!section) return [];
+
+  const lines = section.split('\n').map((l) => (l || '').trim()).filter(Boolean);
+
+  const records: string[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const combined = [lines[i], lines[i + 1], lines[i + 2]].filter(Boolean).join(' ');
-    if (!includesPattern(combined, sectionHeaderPatterns)) continue;
+    const line = lines[i];
 
-    const hasSetMatch = includesPattern(combined, setHeaderPatterns[setType]);
-    const allowFallback =
-      (setType === 'SBK_SET_1' && !hasSet2) || (setType === 'SBK_SET_2' && !hasSet1);
+    // stop als volgende tabelkop niet meer relevant is
+    const low = line.toLowerCase();
+    if (low.startsWith('verklaring van vertrouwelijkheid')) break;
 
-    if (hasSetMatch || allowFallback) headerIndices.push(i);
-  }
+    const first = line.split(' ')[0]?.trim();
+    if (first && knownIndicators.has(first)) {
+      // start record
+      let buf = line;
 
-  if (!headerIndices.length) {
-    if (setType === 'SBK_SET_1' && hasSet2 && !hasSet1) return [];
-    if (setType === 'SBK_SET_2' && hasSet1 && !hasSet2) return [];
-    headerIndices.push(0);
-  }
+      // voeg vervolgregels toe zolang ze niet met een nieuwe indicator starten
+      let j = i + 1;
+      while (j < lines.length) {
+        const next = lines[j];
+        const nextFirst = next.split(' ')[0]?.trim();
+        if (nextFirst && knownIndicators.has(nextFirst)) break;
 
-  const rows: ParsedTableRow[] = [];
+        // stop hard bij duidelijke footer
+        if (next.toLowerCase().includes('ecochain technologies')) break;
 
-  for (const headerIdx of headerIndices) {
-    // Neem een ruime window vanaf de header (inclusief mogelijke split lines)
-    const window = lines.slice(headerIdx + 1, headerIdx + 280);
-
-    // Merge regels: als een regel geen getal heeft maar de volgende wel, plak ze aan elkaar.
-    const merged: string[] = [];
-    for (let i = 0; i < window.length; i++) {
-      const cur = (window[i] || '').trim();
-      if (!cur) continue;
-
-      const low = cur.toLowerCase();
-      // Stop wanneer bedrijfsfooter begint
-      if (low.includes('ecochain technologies') || low.startsWith('ecochain technologies')) break;
-
-      const hasNumber = /[0-9]/.test(cur);
-      const next = (window[i + 1] || '').trim();
-      const nextNext = (window[i + 2] || '').trim();
-
-      if (!hasNumber && next && /[0-9]/.test(next)) {
-        merged.push(`${cur} ${next}`);
-        i++;
-        continue;
+        buf += '\n' + next;
+        j++;
       }
-      if (!hasNumber && next && nextNext && /[0-9]/.test(nextNext)) {
-        merged.push(`${cur} ${next} ${nextNext}`);
-        i += 2;
-        continue;
-      }
-      merged.push(cur);
-    }
 
-    for (const line of merged) {
-      const tokens = line.split(' ').filter(Boolean);
-
-      // Zoek eerste token met cijfers
-      const firstNumIdx = tokens.findIndex((t) => /[0-9]/.test(t));
-      if (firstNumIdx < 0) continue;
-
-      const indicatorIdx = tokens
-        .slice(0, firstNumIdx)
-        .findIndex((token) => normalizeIndicatorToken(token));
-      if (indicatorIdx < 0) continue;
-
-      const indicator = normalizeIndicatorToken(tokens[indicatorIdx]);
-      if (!indicator) continue;
-
-      // unit zit tussen indicator en eerste nummer (kan "kg CO2-eq" etc. zijn)
-      const unit = tokens
-        .slice(indicatorIdx + 1, firstNumIdx)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      const numberTokens = tokens.slice(firstNumIdx);
-
-      // In tabel: A1 A2 A3 A1-A3 D Totaal (we willen eerste 5; Totaal negeren)
-      const nums: number[] = [];
-      for (const t of numberTokens) {
-        const n = parseNumberLoose(t);
-        if (n !== undefined) nums.push(n);
-        if (nums.length >= 5) break;
-      }
-      if (nums.length < 3) continue;
-
-      const values: ParsedTableRow['values'] = {};
-      if (nums[0] !== undefined) values.A1 = nums[0];
-      if (nums[1] !== undefined) values.A2 = nums[1];
-      if (nums[2] !== undefined) values.A3 = nums[2];
-      if (nums[3] !== undefined) values.A1_A3 = nums[3];
-      if (nums[4] !== undefined) values.D = nums[4];
-
-      rows.push({ indicator, unit: unit || '', values });
+      records.push(buf);
+      i = j - 1;
     }
   }
 
-  return rows;
+  const out: { indicator: string; unit: string; nums: number[] }[] = [];
+
+  for (const rec of records) {
+    const indicator = rec.split(/\s+/)[0]?.trim();
+    if (!indicator || !knownIndicators.has(indicator)) continue;
+
+    const rest = rec.slice(indicator.length).trim();
+
+    // maak unit+numbers één string, maar behoud spaties
+    const compact = rest.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const m = compact.match(FIRST_NUM_RE);
+    if (!m || m.index === undefined) continue;
+
+    const unitRaw = compact.slice(0, m.index).trim();
+    const numsRaw = compact.slice(m.index).trim();
+
+    // extract numbers (A1 A2 A3 A1-A3 D Totaal) -> we nemen eerste 5
+    const tokens = numsRaw.match(NUM_RE) || [];
+    const nums: number[] = [];
+    for (const t of tokens) {
+      const n = parseNumberToken(t);
+      if (n === undefined) continue;
+      nums.push(n);
+      if (nums.length >= 5) break;
+    }
+    if (nums.length < 3) continue;
+
+    out.push({ indicator, unit: unitRaw, nums });
+  }
+
+  return out;
 }
 
 // -------- MAIN --------
@@ -380,29 +301,25 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.publicationDate = dateFromText(publicationRaw || '') || dateFromText(text);
   parsed.expirationDate = dateFromText(expirationRaw || '');
 
-  // ---- Verificateur (NIET slopen; tolerant voor pdf-parse splits) ----
+  // ---- Verificateur (houden zoals het werkte; tolerant voor split) ----
   const verifier =
     getLineValue(text, ['Verificateur', 'Verifier', 'Toetser']) ||
     firstMatch(text, [
       /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,120})/i,
-      // "Veri cateur" / "Veri￾cateur" etc.
       /veri.{0,3}cateur\s*[:\-]\s*([^\n]{2,120})/i,
     ]);
-
   parsed.verifierName = verifier;
 
   // LCA methode normaliseren
   const lcaRaw =
     getLineValue(text, ['LCA standaard', 'LCA-methode', 'Bepalingsmethode']) ||
     firstMatch(text, [/lca\s*standaard[:\s]*([^\n]+)/i, /bepalingsmethode[:\s]*([^\n]+)/i]);
-
   parsed.lcaMethod = normalizeLcaMethod(lcaRaw);
 
   // PCR normaliseren
   const pcrRaw =
     getLineValue(text, ['PCR', 'PCR:']) ||
     firstMatch(text, [/^pcr[:\s]*([^\n]+)/im, /pcr[-\s]*asfalt\s*versie[:\s]*([^\n]+)/i]);
-
   parsed.pcrVersion = normalizePcr(pcrRaw).canonical;
 
   // Database: normaliseren + split NMD/EcoInvent
@@ -418,34 +335,21 @@ export function parseEpd(raw: string): ParsedEpd {
   // sets
   parsed.standardSet = detectStandardSet(text);
 
-  // impacts uit tabellen
+  // impacts uit Resultaten-sectie (robust)
   const impacts: ParsedImpact[] = [];
+  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
 
-  const setsToTry: EpdSetType[] =
-    parsed.standardSet === 'SBK_SET_1'
-      ? ['SBK_SET_1']
-      : parsed.standardSet === 'SBK_SET_2'
-      ? ['SBK_SET_2']
-      : ['SBK_SET_1', 'SBK_SET_2'];
   for (const setType of setsToTry) {
     const rows = parseImpactTableForSet(text, setType);
 
-    for (const row of rows) {
-      for (const stage of impactStages) {
-        const v = row.values[stage];
-        if (v === undefined) continue;
+    for (const r of rows) {
+      const [a1, a2, a3, a1a3, d] = r.nums;
 
-      const normalizedStage = normalizeStage(stage);
-      if (!normalizedStage) continue;
-      
-      impacts.push({
-        indicator: row.indicator,
-        setType: setType as any,
-        stage: normalizedStage,
-        value: v,
-        unit: row.unit || '',
-      });
-      }
+      if (a1 !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'A1', value: a1, unit: r.unit });
+      if (a2 !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'A2', value: a2, unit: r.unit });
+      if (a3 !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'A3', value: a3, unit: r.unit });
+      if (a1a3 !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'A1-A3', value: a1a3, unit: r.unit });
+      if (d !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'D', value: d, unit: r.unit });
     }
   }
 

@@ -1,38 +1,12 @@
 // lib/types.ts
 import type { ImpactIndicatorCode } from './impactIndicators';
 
-/**
- * Interne impact stages
- * BELANGRIJK:
- * - Gebruik intern ALTIJD A1_A3
- * - A1-A3 is alleen een UI-label
- */
-export type EpdImpactStage =
-  | 'A1'
-  | 'A2'
-  | 'A3'
-  | 'A1_A3'
-  | 'D';
+export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1-A3' | 'D';
 
-/**
- * SBK set types
- */
-export type EpdSetType =
-  | 'UNKNOWN'
-  | 'SBK_SET_1'
-  | 'SBK_SET_2'
-  | 'SBK_BOTH';
+export type EpdSetType = 'UNKNOWN' | 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH';
 
-/**
- * Indicator type
- * - Canonical codes (GWP, MKI, etc.)
- * - string toegestaan voor future-proofing
- */
 export type ImpactIndicator = ImpactIndicatorCode | string;
 
-/**
- * Parsed impact (uit PDF)
- */
 export type ParsedImpact = {
   indicator: ImpactIndicator;
   setType: EpdSetType;
@@ -41,9 +15,6 @@ export type ParsedImpact = {
   unit?: string;
 };
 
-/**
- * Parsed EPD (uit PDF)
- */
 export type ParsedEpd = {
   productName?: string;
   functionalUnit?: string;
@@ -64,9 +35,6 @@ export type ParsedEpd = {
   impacts: ParsedImpact[];
 };
 
-/**
- * Database record: EPD
- */
 export interface EpdRecord {
   id: string;
   epd_file_id?: string | null;
@@ -90,9 +58,6 @@ export interface EpdRecord {
   custom_attributes: Record<string, string>;
 }
 
-/**
- * Database record: Impact
- */
 export interface EpdImpactRecord {
   id: string;
   epd_id: string;
