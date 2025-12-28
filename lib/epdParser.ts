@@ -45,8 +45,8 @@ function dateFromText(text: string): string | undefined {
 
 /**
  * Haalt "Label: waarde" uit lines.
- * Fix: als pdf-tekst de waarde over 2 regels breekt (zoals "Ecoinvent" + "\n3.6)"),
- * plakken we een duidelijke continuation-regel eraan vast.
+ * Als de waarde door PDF extractie op de volgende regel staat (bv. "Ecoinvent" + "\n3.6)"),
+ * plakken we de volgende regel eraan vast als die alleen "versie-achtig" is.
  */
 function getLineValue(text: string, labelVariants: string[]): string | undefined {
   const lines = text.split('\n');
@@ -61,17 +61,11 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
 
       const looksLikeContinuation =
         next.length > 0 &&
-        (
-          // alleen een versie/nummer + evt haakje
-          /^v?\s*\d+(?:\.\d+){0,3}\)?$/.test(next) ||
-          // of begint met alleen een getal (bv "3.6)")
-          /^\d+(?:\.\d+){0,3}\)?$/.test(next)
-        );
+        (/^v?\s*\d+(?:\.\d+){0,3}\)?$/.test(next) || /^\d+(?:\.\d+){0,3}\)?$/.test(next));
 
       if (afterColon && looksLikeContinuation) {
         return `${afterColon} ${next}`.replace(/\s+/g, ' ').trim();
       }
-
       if (afterColon) return afterColon;
     }
   }
@@ -102,7 +96,7 @@ function normalizePcr(pcrRaw: string | undefined): { canonical?: string } {
   return { canonical };
 }
 
-// -------- LCA normalisatie: altijd "NMD Bepalingsmethode <versie>" --------
+// -------- LCA normalisatie --------
 function normalizeLcaMethod(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const s = raw.replace(/\s+/g, ' ').trim();
@@ -125,7 +119,6 @@ function normalizeDatabases(raw: string | undefined): { canonical?: string; nmd?
     s.match(/nationale\s+milieudatabase\s+v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1] ||
     s.match(/\bnmd\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
 
-  // EcoInvent tolerant (ook "Eco invent", "obv Ecoinvent 3.6", etc.)
   const ecoV =
     s.match(/\beco\s*invent\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1] ||
     s.match(/\bobv\b[^\n]*?\beco\s*invent\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
@@ -148,6 +141,42 @@ function detectStandardSet(text: string): EpdSetType {
   if (has1) return 'SBK_SET_1';
   if (has2) return 'SBK_SET_2';
   return 'UNKNOWN';
+}
+
+// ====== VERIFICATEUR: EXACT zoals "oude" tolerant gedrag + extra robust ======
+// We maken één "super-normalized" versie voor lastige gevallen (Veri cateur / Veriﬁcateur / etc.).
+function collapseForLabelSearch(input: string): string {
+  // Alles naar 1 spatie, verwijder rare breaks tussen letters.
+  return input
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n+/g, ' ')
+    .trim();
+}
+
+function extractVerifier(textLinesPreserved: string): string | undefined {
+  // 1) Eerst line-based (werkt netjes als "Verificateur: Ruben ...")
+  const byLine =
+    getLineValue(textLinesPreserved, ['Verificateur', 'Verifier', 'Toetser', 'Verificator']) ||
+    getLineValue(textLinesPreserved, ['Veri cateur', 'Veri ficateur', 'Veriﬁcateur']);
+  if (byLine) return byLine;
+
+  // 2) Dan tolerant regex op hele tekst (met line breaks)
+  const direct = firstMatch(textLinesPreserved, [
+    /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,120})/i,
+    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([^\n]{2,120})/i,
+    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*:\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
+  ]);
+  if (direct) return direct;
+
+  // 3) Laatste fallback: alles naar 1 regel, zodat "Veri cateur: Ruben" met newline/spacing ook pakt
+  const flat = collapseForLabelSearch(textLinesPreserved);
+  const flatHit = firstMatch(flat, [
+    /(?:verificateur|verifier|toetser)\s*[:\-]\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
+    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
+  ]);
+  return flatHit;
 }
 
 // -------- impact parsing --------
@@ -278,16 +307,8 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.publicationDate = dateFromText(publicationRaw || '') || dateFromText(text);
   parsed.expirationDate = dateFromText(expirationRaw || '');
 
-  // verifier/verificateur/toetser (werkt ook met pdf-splitsing “Veri cateur”)
-  const verifier =
-    getLineValue(text, ['Verificateur', 'Verifier', 'Toetser']) ||
-    firstMatch(text, [
-      /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,80})/i,
-      /veri\s*f(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([^\n]{2,80})/i,
-      /veri\s*f(?:i|î|ï)?\s*cateu?r\s*:\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,80})/,
-    ]);
-
-  parsed.verifierName = verifier;
+  // VERIFICATEUR (hersteld)
+  parsed.verifierName = extractVerifier(text);
 
   // LCA methode: normaliseren
   const lcaRaw =
@@ -313,8 +334,8 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.databaseName = dbNorm.canonical;
   parsed.databaseNmdVersion = dbNorm.nmd;
 
-  // Extra fallback: EcoInvent kan elders in doc staan, of op andere plek/format.
-  const ecoFromFullText = text.match(/\beco\s*invent\b[\s\S]{0,120}?v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
+  // Extra fallback: EcoInvent kan elders in doc staan of gesplitst zijn
+  const ecoFromFullText = text.match(/\beco\s*invent\b[\s\S]{0,140}?v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
   parsed.databaseEcoinventVersion =
     dbNorm.ecoinvent || (ecoFromFullText ? `EcoInvent v${ecoFromFullText}` : undefined);
 
