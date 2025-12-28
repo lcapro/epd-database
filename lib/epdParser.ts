@@ -144,9 +144,10 @@ const knownIndicators = new Set([
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
-// matches scientific notation with comma decimals: 3,655E+0 , also simple 0 or 000000
-const NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/g;
-const FIRST_NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/;
+// matches scientific notation with comma/dot decimals: 3,655E+0 or 3.655E+0
+// require whitespace/end after token to avoid unit strings like CO2 or 1,4-DB-eq
+const NUM_RE = /[+-]?\d+(?:[.,]\d+)?(?:E[+-]?\d+)?(?=\s|$)/gi;
+const FIRST_NUM_RE = /[+-]?\d+(?:[.,]\d+)?(?:E[+-]?\d+)?(?=\s|$)/i;
 
 function parseNumberToken(tok: string): number | undefined {
   const t = tok.trim();
