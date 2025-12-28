@@ -1,21 +1,20 @@
 // lib/types.ts
 import type { ImpactIndicatorCode } from './impactIndicators';
 
-export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D';
+export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1-A3' | 'D';
 
-// voeg BOTH toe
-export type EpdSetType = 'UNKNOWN' | 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH';
+export type EpdSetType =
+  | 'SBK_SET_1'
+  | 'SBK_SET_2'
+  | 'SBK_BOTH'
+  | 'UNKNOWN';
 
-// ParsedImpact moet unit ondersteunen + indicator als string (future-proof)
-// We willen canonical codes gebruiken, maar laten string toe voor toekomstige indicators.
-export type ImpactIndicator = ImpactIndicatorCode | string;
-
-export type ParsedImpact = {
-  indicator: ImpactIndicator;
+export interface ParsedImpact {
+  indicator: string;
   setType: EpdSetType;
   stage: EpdImpactStage;
   value: number;
-  unit?: string; // <-- belangrijk: unit erbij
+  unit: string;
 };
 
 export type ParsedEpd = {
