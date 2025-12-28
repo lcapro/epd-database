@@ -2,6 +2,10 @@ import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from './types';
 
 const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 
+/**
+ * Normalisatie met behoud van regels (belangrijk voor tabellen),
+ * maar wel opgeschoonde whitespace per regel.
+ */
 function normalizePreserveLines(input: string): string {
   return input
     .replace(/\r\n/g, '\n')
@@ -17,6 +21,20 @@ function firstMatch(text: string, patterns: RegExp[]): string | undefined {
   for (const p of patterns) {
     const m = text.match(p);
     if (m?.[1]) return m[1].trim();
+  }
+  return undefined;
+}
+
+function getLineValue(text: string, labelVariants: string[]): string | undefined {
+  const lines = text.split('\n');
+  const lowered = labelVariants.map((l) => l.toLowerCase());
+
+  for (const line of lines) {
+    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab));
+    if (idx >= 0) {
+      const raw = line.split(':').slice(1).join(':').trim();
+      if (raw) return raw;
+    }
   }
   return undefined;
 }
@@ -39,35 +57,6 @@ function dateFromText(text: string): string | undefined {
     const month = matchNl[2].padStart(2, '0');
     const year = matchNl[3];
     return `${year}-${month}-${day}`;
-  }
-  return undefined;
-}
-
-/**
- * Haalt "Label: waarde" uit lines.
- * Als de waarde door PDF extractie op de volgende regel staat (bv. "Ecoinvent" + "\n3.6)"),
- * plakken we de volgende regel eraan vast als die alleen "versie-achtig" is.
- */
-function getLineValue(text: string, labelVariants: string[]): string | undefined {
-  const lines = text.split('\n');
-  const lowered = labelVariants.map((l) => l.toLowerCase());
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const idx = lowered.findIndex((lab) => line.toLowerCase().startsWith(lab));
-    if (idx >= 0) {
-      const afterColon = line.split(':').slice(1).join(':').trim();
-      const next = (lines[i + 1] || '').trim();
-
-      const looksLikeContinuation =
-        next.length > 0 &&
-        (/^v?\s*\d+(?:\.\d+){0,3}\)?$/.test(next) || /^\d+(?:\.\d+){0,3}\)?$/.test(next));
-
-      if (afterColon && looksLikeContinuation) {
-        return `${afterColon} ${next}`.replace(/\s+/g, ' ').trim();
-      }
-      if (afterColon) return afterColon;
-    }
   }
   return undefined;
 }
@@ -110,18 +99,38 @@ function normalizeLcaMethod(raw: string | undefined): string | undefined {
   return s;
 }
 
-// -------- Database normalisatie + split NMD/EcoInvent --------
-function normalizeDatabases(raw: string | undefined): { canonical?: string; nmd?: string; ecoinvent?: string } {
-  if (!raw) return {};
+// -------- NMD/EcoInvent versies (robust, ook over newline) --------
+function extractNmdVersionFromText(text: string): string | undefined {
+  const m =
+    text.match(/nationale\s+milieudatabase\s+v?\s*([0-9]+(?:\.[0-9]+)*)/i) ||
+    text.match(/\bnmd\b[\s\S]{0,80}?v?\s*([0-9]+(?:\.[0-9]+)*)/i);
+  return m?.[1];
+}
+
+function extractEcoinventVersionFromText(text: string): string | undefined {
+  // Kan zijn: "Ecoinvent\n3.6" of "Ecoinvent v3.6"
+  const m =
+    text.match(/\becoinvent\b[\s\S]{0,40}?v?\s*([0-9]+(?:\.[0-9]+)*)/i) ||
+    text.match(/\bobv\s*ecoinvent\b[\s\S]{0,40}?v?\s*([0-9]+(?:\.[0-9]+)*)/i);
+  return m?.[1];
+}
+
+function normalizeDatabases(raw: string | undefined, fullText: string): { canonical?: string; nmd?: string; ecoinvent?: string } {
+  if (!raw) {
+    // fallback: toch proberen uit hele tekst
+    const nmdV = extractNmdVersionFromText(fullText);
+    const ecoV = extractEcoinventVersionFromText(fullText);
+    return {
+      canonical: undefined,
+      nmd: nmdV ? `NMD v${nmdV}` : undefined,
+      ecoinvent: ecoV ? `EcoInvent v${ecoV}` : undefined,
+    };
+  }
+
   const s = raw.replace(/\s+/g, ' ').trim();
 
-  const nmdV =
-    s.match(/nationale\s+milieudatabase\s+v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1] ||
-    s.match(/\bnmd\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
-
-  const ecoV =
-    s.match(/\beco\s*invent\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1] ||
-    s.match(/\bobv\b[^\n]*?\beco\s*invent\b[^\d]*v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
+  const nmdV = extractNmdVersionFromText(s) || extractNmdVersionFromText(fullText);
+  const ecoV = extractEcoinventVersionFromText(s) || extractEcoinventVersionFromText(fullText);
 
   const nmd = nmdV ? `NMD v${nmdV}` : undefined;
   const ecoinvent = ecoV ? `EcoInvent v${ecoV}` : undefined;
@@ -143,79 +152,54 @@ function detectStandardSet(text: string): EpdSetType {
   return 'UNKNOWN';
 }
 
-// ====== VERIFICATEUR: EXACT zoals "oude" tolerant gedrag + extra robust ======
-// We maken één "super-normalized" versie voor lastige gevallen (Veri cateur / Veriﬁcateur / etc.).
-function collapseForLabelSearch(input: string): string {
-  // Alles naar 1 spatie, verwijder rare breaks tussen letters.
-  return input
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n+/g, ' ')
-    .trim();
-}
-
-function extractVerifier(textLinesPreserved: string): string | undefined {
-  // 1) Eerst line-based (werkt netjes als "Verificateur: Ruben ...")
-  const byLine =
-    getLineValue(textLinesPreserved, ['Verificateur', 'Verifier', 'Toetser', 'Verificator']) ||
-    getLineValue(textLinesPreserved, ['Veri cateur', 'Veri ficateur', 'Veriﬁcateur']);
-  if (byLine) return byLine;
-
-  // 2) Dan tolerant regex op hele tekst (met line breaks)
-  const direct = firstMatch(textLinesPreserved, [
-    /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,120})/i,
-    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([^\n]{2,120})/i,
-    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*:\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
-  ]);
-  if (direct) return direct;
-
-  // 3) Laatste fallback: alles naar 1 regel, zodat "Veri cateur: Ruben" met newline/spacing ook pakt
-  const flat = collapseForLabelSearch(textLinesPreserved);
-  const flatHit = firstMatch(flat, [
-    /(?:verificateur|verifier|toetser)\s*[:\-]\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
-    /veri\s*f\s*(?:i|î|ï)?\s*cateu?r\s*[:\-]\s*([A-Z][A-Za-zÀ-ÿ'\- ]{2,120})/i,
-  ]);
-  return flatHit;
-}
-
 // -------- impact parsing --------
 type ParsedTableRow = {
   indicator: string;
   unit: string;
-  values: Record<EpdImpactStage, number>;
+  values: Partial<Record<EpdImpactStage, number>>;
 };
 
+const knownIndicators = new Set([
+  'MKI','ADPE','ADPF','GWP','ODP','POCP','AP','EP','HTP','FAETP','MAETP','TETP',
+  'PERE','PERM','PERT','PENRE','PENRM','PENRT','PET','SM','RSF','NRSF','FW',
+  'HWD','NHWD','RWD','CRU','MFR','MER','EE','EET','EEE',
+]);
+
+/**
+ * Vindt de tabel op basis van de daadwerkelijke headerregel:
+ * "Milieu-impact SBK set 1 ..." of "Milieu-impact SBK set 2 ..."
+ *
+ * In jouw PDF staat "Resultaten" vaak op een aparte regel, daarom niet daarop matchen.
+ */
 function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableRow[] {
-  const setLabel = setType === 'SBK_SET_2' ? 'SBK set 2' : 'SBK set 1';
   const lines = text.split('\n');
+  const setNo = setType === 'SBK_SET_2' ? '2' : '1';
 
-  const startIdx = lines.findIndex(
-    (l) => l.toLowerCase().includes('resultaten') && l.toLowerCase().includes(setLabel.toLowerCase())
-  );
-  if (startIdx < 0) return [];
+  const headerIdx = lines.findIndex((l) => {
+    const low = l.toLowerCase();
+    return low.includes('milieu') && low.includes('impact') && low.includes('sbk') && low.includes(`set ${setNo}`);
+  });
 
-  const window = lines.slice(startIdx, startIdx + 260);
+  if (headerIdx < 0) return [];
 
+  // Neem een ruime window vanaf de header (inclusief mogelijke split lines)
+  const window = lines.slice(headerIdx + 1, headerIdx + 280);
+
+  // Merge regels: als een regel geen getal heeft maar de volgende wel, plak ze aan elkaar.
   const merged: string[] = [];
   for (let i = 0; i < window.length; i++) {
-    const cur = window[i].trim();
+    const cur = (window[i] || '').trim();
     if (!cur) continue;
 
     const low = cur.toLowerCase();
-    if (
-      i > 10 &&
-      (low.startsWith('gebruik van grondsto') ||
-        low.startsWith('output stromen') ||
-        low.startsWith('verklaring van vertrouwelijkheid') ||
-        low.includes('ecochain technologies'))
-    ) {
-      break;
-    }
+    // Stop wanneer bedrijfsfooter begint
+    if (low.includes('ecochain technologies') || low.startsWith('ecochain technologies')) break;
 
-    const hasNumber = /[\d]/.test(cur);
-    if (!hasNumber && window[i + 1] && /[\d]/.test(window[i + 1])) {
-      merged.push(`${cur} ${window[i + 1].trim()}`);
+    const hasNumber = /[0-9]/.test(cur);
+    const next = (window[i + 1] || '').trim();
+
+    if (!hasNumber && next && /[0-9]/.test(next)) {
+      merged.push(`${cur} ${next}`);
       i++;
       continue;
     }
@@ -223,24 +207,25 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
   }
 
   const rows: ParsedTableRow[] = [];
-  const knownIndicators = [
-    'MKI','ADPE','ADPF','GWP','ODP','POCP','AP','EP','HTP','FAETP','MAETP','TETP',
-    'PERE','PERM','PERT','PENRE','PENRM','PENRT','PET','SM','RSF','NRSF','FW',
-    'HWD','NHWD','RWD','CRU','MFR','MER','EE','EET','EEE',
-  ];
 
   for (const line of merged) {
     const firstToken = line.split(' ')[0]?.trim();
-    if (!firstToken || !knownIndicators.includes(firstToken)) continue;
+    if (!firstToken || !knownIndicators.has(firstToken)) continue;
 
     const tokens = line.split(' ').filter(Boolean);
-    const firstNumIdx = tokens.findIndex((t) => /[\d]/.test(t) && /[0-9]/.test(t));
+
+    // Zoek eerste token met cijfers
+    const firstNumIdx = tokens.findIndex((t) => /[0-9]/.test(t));
     if (firstNumIdx < 0) continue;
 
     const indicator = tokens[0];
+
+    // unit zit tussen indicator en eerste nummer (kan "kg CO2-eq" etc. zijn)
     const unit = tokens.slice(1, firstNumIdx).join(' ').replace(/\s+/g, ' ').trim();
 
     const numberTokens = tokens.slice(firstNumIdx);
+
+    // In tabel: A1 A2 A3 A1-A3 D Totaal (we willen eerste 5; Totaal negeren)
     const nums: number[] = [];
     for (const t of numberTokens) {
       const n = parseNumberLoose(t);
@@ -249,7 +234,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
     }
     if (nums.length < 3) continue;
 
-    const values: Record<EpdImpactStage, number> = {} as any;
+    const values: ParsedTableRow['values'] = {};
     if (nums[0] !== undefined) values.A1 = nums[0];
     if (nums[1] !== undefined) values.A2 = nums[1];
     if (nums[2] !== undefined) values.A3 = nums[2];
@@ -284,21 +269,21 @@ export function parseEpd(raw: string): ParsedEpd {
 
   // basis
   parsed.productName =
-    getLineValue(text, ['Productnaam', 'Product naam', 'Product name', 'Product']) ||
+    getLineValue(text, ['Product:', 'Productnaam', 'Product naam', 'Product name', 'Product']) ||
     firstMatch(text, [/^product\s*naam[:\s]*([^\n]{2,160})/im, /^product\s*name[:\s]*([^\n]{2,160})/im]);
 
   parsed.functionalUnit =
-    getLineValue(text, ['Functionele eenheid', 'Functional unit', 'Eenheid']) ||
+    getLineValue(text, ['Eenheid:', 'Functionele eenheid', 'Functional unit', 'Eenheid']) ||
     firstMatch(text, [/^functionele\s*eenheid[:\s]*([^\n]{2,160})/im, /^functional\s*unit[:\s]*([^\n]{2,160})/im]);
 
   parsed.producerName =
-    getLineValue(text, ['Producent', 'Producer']) ||
-    firstMatch(text, [/^producent[:\s]*([^\n]{2,120})/im, /^producer[:\s]*([^\n]{2,120})/im]);
+    getLineValue(text, ['Producent:', 'Producent', 'Producer']) ||
+    firstMatch(text, [/^producent[:\s]*([^\n]{2,160})/im, /^producer[:\s]*([^\n]{2,160})/im]);
 
   // publicatie/geldigheid
   const publicationRaw =
     getLineValue(text, ['Datum van publicatie', 'Publicatie datum', 'Publicatie']) ||
-    firstMatch(text, [/publicatie[:\s]*datum[:\s]*([^\n]+)/i]);
+    firstMatch(text, [/datum\s+van\s+publicatie[:\s]*([^\n]+)/i, /publicatie[:\s]*datum[:\s]*([^\n]+)/i]);
 
   const expirationRaw =
     getLineValue(text, ['Einde geldigheid', 'Geldig tot', 'Expiration']) ||
@@ -307,55 +292,60 @@ export function parseEpd(raw: string): ParsedEpd {
   parsed.publicationDate = dateFromText(publicationRaw || '') || dateFromText(text);
   parsed.expirationDate = dateFromText(expirationRaw || '');
 
-  // VERIFICATEUR (hersteld)
-  parsed.verifierName = extractVerifier(text);
+  // ---- Verificateur (NIET slopen; tolerant voor pdf-parse splits) ----
+  const verifier =
+    getLineValue(text, ['Verificateur', 'Verifier', 'Toetser']) ||
+    firstMatch(text, [
+      /(?:verificateur|verifier|toetser)\s*[:\-]\s*([^\n]{2,120})/i,
+      // "Veri cateur" / "Veri￾cateur" etc.
+      /veri.{0,3}cateur\s*[:\-]\s*([^\n]{2,120})/i,
+    ]);
 
-  // LCA methode: normaliseren
+  parsed.verifierName = verifier;
+
+  // LCA methode normaliseren
   const lcaRaw =
     getLineValue(text, ['LCA standaard', 'LCA-methode', 'Bepalingsmethode']) ||
     firstMatch(text, [/lca\s*standaard[:\s]*([^\n]+)/i, /bepalingsmethode[:\s]*([^\n]+)/i]);
 
   parsed.lcaMethod = normalizeLcaMethod(lcaRaw);
 
-  // PCR: normaliseren
-  const pcrLine =
+  // PCR normaliseren
+  const pcrRaw =
     getLineValue(text, ['PCR', 'PCR:']) ||
-    firstMatch(text, [/pcr[:\s]*([^\n]+)/i, /pcr[-\s]*asfalt\s*versie[:\s]*([^\n]+)/i]);
+    firstMatch(text, [/^pcr[:\s]*([^\n]+)/im, /pcr[-\s]*asfalt\s*versie[:\s]*([^\n]+)/i]);
 
-  parsed.pcrVersion = normalizePcr(pcrLine).canonical;
+  parsed.pcrVersion = normalizePcr(pcrRaw).canonical;
 
   // Database: normaliseren + split NMD/EcoInvent
   const dbRaw =
     getLineValue(text, ['Standaard database', 'Database']) ||
     firstMatch(text, [/standaard\s*database[:\s]*([^\n]+)/i, /database[:\s]*([^\n]+)/i]);
 
-  const dbNorm = normalizeDatabases(dbRaw);
-
+  const dbNorm = normalizeDatabases(dbRaw, text);
   parsed.databaseName = dbNorm.canonical;
   parsed.databaseNmdVersion = dbNorm.nmd;
-
-  // Extra fallback: EcoInvent kan elders in doc staan of gesplitst zijn
-  const ecoFromFullText = text.match(/\beco\s*invent\b[\s\S]{0,140}?v?\s*([0-9]+(?:\.[0-9]+){0,2})/i)?.[1];
-  parsed.databaseEcoinventVersion =
-    dbNorm.ecoinvent || (ecoFromFullText ? `EcoInvent v${ecoFromFullText}` : undefined);
+  parsed.databaseEcoinventVersion = dbNorm.ecoinvent;
 
   // sets
   parsed.standardSet = detectStandardSet(text);
 
   // impacts uit tabellen
   const impacts: ParsedImpact[] = [];
-  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
 
+  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
   for (const setType of setsToTry) {
     const rows = parseImpactTableForSet(text, setType);
+
     for (const row of rows) {
       for (const stage of impactStages) {
         const v = row.values[stage];
         if (v === undefined) continue;
 
+        // ParsedImpact in jouw project accepteert indicator als string + unit
         impacts.push({
           indicator: row.indicator,
-          setType: setType as any,
+          setType,
           stage,
           value: v,
           unit: row.unit || '',
@@ -366,7 +356,7 @@ export function parseEpd(raw: string): ParsedEpd {
 
   parsed.impacts = impacts;
 
-  // als beide tabellen echt gevonden zijn: zet op BOTH
+  // extra zekerheid: als we echt impacts voor beide sets hebben
   const hasSet1 = parsed.impacts.some((i) => i.setType === 'SBK_SET_1');
   const hasSet2 = parsed.impacts.some((i) => i.setType === 'SBK_SET_2');
   if (hasSet1 && hasSet2) parsed.standardSet = 'SBK_BOTH';
