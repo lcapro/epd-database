@@ -51,9 +51,21 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
 
 function parseNumberLoose(value?: string | null): number | undefined {
   if (!value) return undefined;
-  const v = value.replace(/\s+/g, '');
-  const normalized = v.replace(',', '.');
-  const n = Number(normalized);
+  let v = value.replace(/\s+/g, '').trim();
+  v = v.replace(/[−–—]/g, '-');
+  v = v.replace(/[^0-9eE+\-.,]/g, '');
+
+  if (v.includes(',') && v.includes('.')) {
+    if (v.lastIndexOf(',') > v.lastIndexOf('.')) {
+      v = v.replace(/\./g, '').replace(',', '.');
+    } else {
+      v = v.replace(/,/g, '');
+    }
+  } else {
+    v = v.replace(',', '.');
+  }
+
+  const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
 
@@ -175,6 +187,44 @@ const knownIndicators = new Set([
   'HWD','NHWD','RWD','CRU','MFR','MER','EE','EET','EEE',
 ]);
 
+const indicatorAliases: Record<string, string> = {
+  GWPTOTAL: 'GWP',
+  CO2: 'GWP',
+  CO2EQ: 'GWP',
+};
+
+function normalizeIndicatorToken(token: string): string | null {
+  const cleaned = token.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (!cleaned) return null;
+  if (knownIndicators.has(cleaned)) return cleaned;
+  if (cleaned.startsWith('GWP')) return 'GWP';
+  if (indicatorAliases[cleaned]) return indicatorAliases[cleaned];
+  return null;
+}
+
+const sectionHeaderPatterns = [
+  /milieu[-\s]*impact/i,
+  /environmental\s+impact/i,
+  /gebruik\s+van\s+grondstoffen/i,
+  /resource\s+use/i,
+  /use\s+of\s+resources/i,
+  /afval/i,
+  /waste\s+categor/i,
+  /uitgaande\s+stromen/i,
+  /output\s+flows?/i,
+];
+
+const setHeaderPatterns: Record<EpdSetType, RegExp[]> = {
+  SBK_SET_1: [/sbk\s*set\s*1/i, /en\s*15804\s*\+?\s*a1/i, /en15804\s*\+?\s*a1/i],
+  SBK_SET_2: [/sbk\s*set\s*2/i, /en\s*15804\s*\+?\s*a2/i, /en15804\s*\+?\s*a2/i],
+  SBK_BOTH: [],
+  UNKNOWN: [],
+};
+
+function includesPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((p) => p.test(text));
+}
+
 /**
  * Vindt de tabel op basis van de daadwerkelijke headerregel:
  * "Milieu-impact SBK set 1 ..." of "Milieu-impact SBK set 2 ..."
@@ -183,75 +233,103 @@ const knownIndicators = new Set([
  */
 function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableRow[] {
   const lines = text.split('\n');
-  const setNo = setType === 'SBK_SET_2' ? '2' : '1';
+  const textLower = text.toLowerCase();
+  const headerIndices: number[] = [];
+  const hasSet1 = includesPattern(textLower, setHeaderPatterns.SBK_SET_1);
+  const hasSet2 = includesPattern(textLower, setHeaderPatterns.SBK_SET_2);
 
-  const headerIdx = lines.findIndex((l) => {
-    const low = l.toLowerCase();
-    return low.includes('milieu') && low.includes('impact') && low.includes('sbk') && low.includes(`set ${setNo}`);
-  });
+  for (let i = 0; i < lines.length; i++) {
+    const combined = [lines[i], lines[i + 1], lines[i + 2]].filter(Boolean).join(' ');
+    if (!includesPattern(combined, sectionHeaderPatterns)) continue;
 
-  if (headerIdx < 0) return [];
+    const hasSetMatch = includesPattern(combined, setHeaderPatterns[setType]);
+    const allowFallback =
+      (setType === 'SBK_SET_1' && !hasSet2) || (setType === 'SBK_SET_2' && !hasSet1);
 
-  // Neem een ruime window vanaf de header (inclusief mogelijke split lines)
-  const window = lines.slice(headerIdx + 1, headerIdx + 280);
+    if (hasSetMatch || allowFallback) headerIndices.push(i);
+  }
 
-  // Merge regels: als een regel geen getal heeft maar de volgende wel, plak ze aan elkaar.
-  const merged: string[] = [];
-  for (let i = 0; i < window.length; i++) {
-    const cur = (window[i] || '').trim();
-    if (!cur) continue;
-
-    const low = cur.toLowerCase();
-    // Stop wanneer bedrijfsfooter begint
-    if (low.includes('ecochain technologies') || low.startsWith('ecochain technologies')) break;
-
-    const hasNumber = /[0-9]/.test(cur);
-    const next = (window[i + 1] || '').trim();
-
-    if (!hasNumber && next && /[0-9]/.test(next)) {
-      merged.push(`${cur} ${next}`);
-      i++;
-      continue;
-    }
-    merged.push(cur);
+  if (!headerIndices.length) {
+    if (setType === 'SBK_SET_1' && hasSet2 && !hasSet1) return [];
+    if (setType === 'SBK_SET_2' && hasSet1 && !hasSet2) return [];
+    headerIndices.push(0);
   }
 
   const rows: ParsedTableRow[] = [];
 
-  for (const line of merged) {
-    const firstToken = line.split(' ')[0]?.trim();
-    if (!firstToken || !knownIndicators.has(firstToken)) continue;
+  for (const headerIdx of headerIndices) {
+    // Neem een ruime window vanaf de header (inclusief mogelijke split lines)
+    const window = lines.slice(headerIdx + 1, headerIdx + 280);
 
-    const tokens = line.split(' ').filter(Boolean);
+    // Merge regels: als een regel geen getal heeft maar de volgende wel, plak ze aan elkaar.
+    const merged: string[] = [];
+    for (let i = 0; i < window.length; i++) {
+      const cur = (window[i] || '').trim();
+      if (!cur) continue;
 
-    // Zoek eerste token met cijfers
-    const firstNumIdx = tokens.findIndex((t) => /[0-9]/.test(t));
-    if (firstNumIdx < 0) continue;
+      const low = cur.toLowerCase();
+      // Stop wanneer bedrijfsfooter begint
+      if (low.includes('ecochain technologies') || low.startsWith('ecochain technologies')) break;
 
-    const indicator = tokens[0];
+      const hasNumber = /[0-9]/.test(cur);
+      const next = (window[i + 1] || '').trim();
+      const nextNext = (window[i + 2] || '').trim();
 
-    // unit zit tussen indicator en eerste nummer (kan "kg CO2-eq" etc. zijn)
-    const unit = tokens.slice(1, firstNumIdx).join(' ').replace(/\s+/g, ' ').trim();
-
-    const numberTokens = tokens.slice(firstNumIdx);
-
-    // In tabel: A1 A2 A3 A1-A3 D Totaal (we willen eerste 5; Totaal negeren)
-    const nums: number[] = [];
-    for (const t of numberTokens) {
-      const n = parseNumberLoose(t);
-      if (n !== undefined) nums.push(n);
-      if (nums.length >= 5) break;
+      if (!hasNumber && next && /[0-9]/.test(next)) {
+        merged.push(`${cur} ${next}`);
+        i++;
+        continue;
+      }
+      if (!hasNumber && next && nextNext && /[0-9]/.test(nextNext)) {
+        merged.push(`${cur} ${next} ${nextNext}`);
+        i += 2;
+        continue;
+      }
+      merged.push(cur);
     }
-    if (nums.length < 3) continue;
 
-    const values: ParsedTableRow['values'] = {};
-    if (nums[0] !== undefined) values.A1 = nums[0];
-    if (nums[1] !== undefined) values.A2 = nums[1];
-    if (nums[2] !== undefined) values.A3 = nums[2];
-    if (nums[3] !== undefined) values.A1_A3 = nums[3];
-    if (nums[4] !== undefined) values.D = nums[4];
+    for (const line of merged) {
+      const tokens = line.split(' ').filter(Boolean);
 
-    rows.push({ indicator, unit: unit || '', values });
+      // Zoek eerste token met cijfers
+      const firstNumIdx = tokens.findIndex((t) => /[0-9]/.test(t));
+      if (firstNumIdx < 0) continue;
+
+      const indicatorIdx = tokens
+        .slice(0, firstNumIdx)
+        .findIndex((token) => normalizeIndicatorToken(token));
+      if (indicatorIdx < 0) continue;
+
+      const indicator = normalizeIndicatorToken(tokens[indicatorIdx]);
+      if (!indicator) continue;
+
+      // unit zit tussen indicator en eerste nummer (kan "kg CO2-eq" etc. zijn)
+      const unit = tokens
+        .slice(indicatorIdx + 1, firstNumIdx)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const numberTokens = tokens.slice(firstNumIdx);
+
+      // In tabel: A1 A2 A3 A1-A3 D Totaal (we willen eerste 5; Totaal negeren)
+      const nums: number[] = [];
+      for (const t of numberTokens) {
+        const n = parseNumberLoose(t);
+        if (n !== undefined) nums.push(n);
+        if (nums.length >= 5) break;
+      }
+      if (nums.length < 3) continue;
+
+      const values: ParsedTableRow['values'] = {};
+      if (nums[0] !== undefined) values.A1 = nums[0];
+      if (nums[1] !== undefined) values.A2 = nums[1];
+      if (nums[2] !== undefined) values.A3 = nums[2];
+      if (nums[3] !== undefined) values.A1_A3 = nums[3];
+      if (nums[4] !== undefined) values.D = nums[4];
+
+      rows.push({ indicator, unit: unit || '', values });
+    }
   }
 
   return rows;
@@ -343,7 +421,12 @@ export function parseEpd(raw: string): ParsedEpd {
   // impacts uit tabellen
   const impacts: ParsedImpact[] = [];
 
-  const setsToTry: EpdSetType[] = ['SBK_SET_1', 'SBK_SET_2'];
+  const setsToTry: EpdSetType[] =
+    parsed.standardSet === 'SBK_SET_1'
+      ? ['SBK_SET_1']
+      : parsed.standardSet === 'SBK_SET_2'
+      ? ['SBK_SET_2']
+      : ['SBK_SET_1', 'SBK_SET_2'];
   for (const setType of setsToTry) {
     const rows = parseImpactTableForSet(text, setType);
 
