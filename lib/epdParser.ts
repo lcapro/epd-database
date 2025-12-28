@@ -142,6 +142,7 @@ const knownIndicators = new Set([
   'PERE','PERM','PERT','PENRE','PENRM','PENRT','PET','SM','RSF','NRSF','FW',
   'HWD','NHWD','RWD','CRU','MFR','MER','EE','EET','EEE',
 ]);
+const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
 // matches scientific notation with comma decimals: 3,655E+0 , also simple 0 or 000000
 const NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/g;
@@ -190,6 +191,15 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
 
   const lines = section.split('\n').map((l) => (l || '').trim()).filter(Boolean);
 
+  const detectIndicator = (line: string): string | undefined => {
+    const trimmed = line.trim();
+    const upper = trimmed.toUpperCase();
+    for (const indicator of orderedIndicators) {
+      if (upper.startsWith(indicator)) return indicator;
+    }
+    return undefined;
+  };
+
   const records: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -198,8 +208,8 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     const low = line.toLowerCase();
     if (low.startsWith('verklaring van vertrouwelijkheid')) break;
 
-    const first = line.split(' ')[0]?.trim();
-    if (first && knownIndicators.has(first)) {
+    const indicator = detectIndicator(line);
+    if (indicator) {
       // start record
       let buf = line;
 
@@ -207,8 +217,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
       let j = i + 1;
       while (j < lines.length) {
         const next = lines[j];
-        const nextFirst = next.split(' ')[0]?.trim();
-        if (nextFirst && knownIndicators.has(nextFirst)) break;
+        if (detectIndicator(next)) break;
 
         // stop hard bij duidelijke footer
         if (next.toLowerCase().includes('ecochain technologies')) break;
@@ -225,8 +234,8 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
   const out: { indicator: string; unit: string; nums: number[] }[] = [];
 
   for (const rec of records) {
-    const indicator = rec.split(/\s+/)[0]?.trim();
-    if (!indicator || !knownIndicators.has(indicator)) continue;
+    const indicator = detectIndicator(rec);
+    if (!indicator) continue;
 
     const rest = rec.slice(indicator.length).trim();
 
