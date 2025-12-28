@@ -175,6 +175,19 @@ function shouldAcceptToken(text: string, start: number, end: number): boolean {
   return true;
 }
 
+function shouldAcceptFirstToken(text: string, start: number, end: number, token: string): boolean {
+  const prev = text[start - 1];
+  const next = text[end];
+  const next2 = text[end + 1];
+
+  if (isAlpha(next)) return false;
+  if (next === '-' && isAlpha(next2)) return false;
+  if (isAlpha(prev)) {
+    return /e/i.test(token);
+  }
+  return true;
+}
+
 function extractNumberTokens(text: string): string[] {
   const tokens: string[] = [];
   const re = new RegExp(NUM_RE.source, 'gi');
@@ -191,6 +204,10 @@ function extractNumberTokens(text: string): string[] {
     match = re.exec(text);
   }
   return tokens;
+}
+
+function insertConcatenatedSeparators(text: string): string {
+  return text.replace(/E([+-]?\d)(?=\d,)/gi, 'E$1 ');
 }
 
 /**
@@ -283,7 +300,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
       if (token) {
         const index = firstMatch.index ?? 0;
         const end = index + token.length;
-        if (shouldAcceptToken(compact, index, end)) {
+        if (shouldAcceptFirstToken(compact, index, end, token)) {
           firstIndex = index;
           break;
         }
@@ -293,10 +310,13 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     if (firstIndex === undefined) continue;
 
     const unitRaw = compact.slice(0, firstIndex).trim();
-    const numsRaw = compact.slice(firstIndex).trim();
+    const numsRaw = insertConcatenatedSeparators(compact.slice(firstIndex).trim());
 
     // extract numbers (A1 A2 A3 A1-A3 D Totaal) -> we nemen eerste 5
-    const tokens = extractNumberTokens(numsRaw);
+    let tokens = extractNumberTokens(numsRaw);
+    if (tokens.length < 3 && /^0+$/.test(numsRaw.replace(/\s+/g, ''))) {
+      tokens = Array(5).fill('0');
+    }
     const nums: number[] = [];
     for (const t of tokens) {
       const n = parseNumberToken(t);
