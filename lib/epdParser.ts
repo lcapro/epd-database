@@ -11,7 +11,7 @@ function normalizeStage(stage: string): 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D' | nul
   if (s === 'A1') return 'A1';
   if (s === 'A2') return 'A2';
   if (s === 'A3') return 'A3';
-  if (s === 'A1-A3' || s === 'A1_A3') return 'A1_A3';
+  if (s === 'A1-A3' || s === 'A1_A3') return 'A1-A3';
   if (s === 'D') return 'D';
   return null;
 }
@@ -248,7 +248,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): ParsedTableR
     if (nums[0] !== undefined) values.A1 = nums[0];
     if (nums[1] !== undefined) values.A2 = nums[1];
     if (nums[2] !== undefined) values.A3 = nums[2];
-    if (nums[3] !== undefined) values.A1_A3 = nums[3];
+    if (nums[3] !== undefined) values['A1-A3'] = nums[3];
     if (nums[4] !== undefined) values.D = nums[4];
 
     rows.push({ indicator, unit: unit || '', values });
