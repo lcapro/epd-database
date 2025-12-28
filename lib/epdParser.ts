@@ -177,13 +177,18 @@ function shouldAcceptToken(text: string, start: number, end: number): boolean {
 
 function extractNumberTokens(text: string): string[] {
   const tokens: string[] = [];
-  for (const match of text.matchAll(NUM_RE)) {
+  const re = new RegExp(NUM_RE.source, 'gi');
+  let match = re.exec(text);
+  while (match) {
     const token = match[0];
-    if (!token) continue;
-    const index = match.index ?? 0;
-    const end = index + token.length;
-    if (!shouldAcceptToken(text, index, end)) continue;
-    tokens.push(token);
+    if (token) {
+      const index = match.index ?? 0;
+      const end = index + token.length;
+      if (shouldAcceptToken(text, index, end)) {
+        tokens.push(token);
+      }
+    }
+    match = re.exec(text);
   }
   return tokens;
 }
@@ -271,14 +276,19 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     const compact = rest.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
 
     let firstIndex: number | undefined;
-    for (const match of compact.matchAll(NUM_RE)) {
-      const token = match[0];
-      if (!token) continue;
-      const index = match.index ?? 0;
-      const end = index + token.length;
-      if (!shouldAcceptToken(compact, index, end)) continue;
-      firstIndex = index;
-      break;
+    const firstRe = new RegExp(NUM_RE.source, 'gi');
+    let firstMatch = firstRe.exec(compact);
+    while (firstMatch) {
+      const token = firstMatch[0];
+      if (token) {
+        const index = firstMatch.index ?? 0;
+        const end = index + token.length;
+        if (shouldAcceptToken(compact, index, end)) {
+          firstIndex = index;
+          break;
+        }
+      }
+      firstMatch = firstRe.exec(compact);
     }
     if (firstIndex === undefined) continue;
 
