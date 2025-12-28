@@ -1,29 +1,44 @@
-export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D';
-export type EpdSetType = 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH' | 'UNKNOWN';
+// lib/types.ts
+import type { ImpactIndicatorCode } from './impactIndicators';
 
-export interface ParsedImpact {
-  indicator: string;
-  unit?: string; 
+export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1_A3' | 'D';
+
+// voeg BOTH toe
+export type EpdSetType = 'UNKNOWN' | 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH';
+
+// ParsedImpact moet unit ondersteunen + indicator als string (future-proof)
+// We willen canonical codes gebruiken, maar laten string toe voor toekomstige indicators.
+export type ImpactIndicator = ImpactIndicatorCode | string;
+
+export type ParsedImpact = {
+  indicator: ImpactIndicator;
   setType: EpdSetType;
   stage: EpdImpactStage;
   value: number;
-}
+  unit?: string; // <-- belangrijk: unit erbij
+};
 
-export interface ParsedEpd {
+export type ParsedEpd = {
   productName?: string;
   functionalUnit?: string;
   producerName?: string;
   lcaMethod?: string;
   pcrVersion?: string;
   databaseName?: string;
+
+  // nieuwe velden die je al gebruikt
   databaseNmdVersion?: string;
   databaseEcoinventVersion?: string;
-  publicationDate?: string; // ISO date
-  expirationDate?: string; // ISO date
+
+  publicationDate?: string;
+  expirationDate?: string;
   verifierName?: string;
+
   standardSet: EpdSetType;
   impacts: ParsedImpact[];
-}
+};
+
+// (de rest van jouw types mag blijven zoals het is)
 
 export interface EpdRecord {
   id: string;
