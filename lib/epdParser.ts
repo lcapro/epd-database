@@ -69,7 +69,7 @@ function getLineValue(text: string, labelVariants: string[]): string | undefined
     s
       .toLowerCase()
       .replace(/[:\s]+$/g, '')
-      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/[^a-z0-9]+/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
