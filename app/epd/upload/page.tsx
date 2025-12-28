@@ -2,23 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
-import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType } from '@/lib/types';
-
-/**
- * Stap 4 – Upload UI (volledig)
- * - Ondersteunt ALLE impactcategorieën (niet alleen MKI/CO2)
- * - Gebruiker kan kiezen welke categorieën zichtbaar zijn
- * - Units worden per categorie opgeslagen/meegegeven (bijv. Euro, kg CO2-eq, kg Sb-eq, MJ, etc.)
- *
- * Verwachting:
- * - ParsedImpact bevat minimaal: { indicator: string, setType, stage, value, unit? }
- *   (Als jouw ParsedImpact indicator nog 'MKI'|'CO2' is, pas types stap 2/3 aan.)
- */
+import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
+import { ALL_INDICATOR_CODES, IMPACT_INDICATORS, isKnownIndicator, ImpactIndicatorCode } from '@/lib/impactIndicators';
 
 const stages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1_A3', 'D'];
 
-// Als je alleen set1/set2 wilt laten invullen in UI, laat UNKNOWN weg.
-// (In DB mag UNKNOWN nog wel bestaan.)
 const sets: { value: EpdSetType; label: string }[] = [
   { value: 'UNKNOWN', label: 'Onbekend' },
   { value: 'SBK_SET_1', label: 'SBK set 1 (+A1)' },
@@ -26,61 +14,8 @@ const sets: { value: EpdSetType; label: string }[] = [
   { value: 'SBK_BOTH', label: 'Beide sets (A1 + A2)' },
 ];
 
-/**
- * Masterlijst van categorieën die je uiteindelijk wil ondersteunen.
- * Je kunt dit later uitbreiden zonder je datamodel te slopen.
- * label = wat de gebruiker ziet
- * unitHint = suggestie; echte unit komt bij voorkeur uit parsing (PDF) of user input
- */
-const IMPACT_CATEGORIES: { key: string; label: string; unitHint?: string; group: 'Kern' | 'Impact' | 'Resources' | 'Waste' }[] =
-  [
-    // Kern
-    { key: 'MKI', label: 'MKI', unitHint: 'Euro', group: 'Kern' },
-    { key: 'GWP', label: 'GWP (klimaatverandering)', unitHint: 'kg CO2-eq', group: 'Kern' },
-
-    // Impact (EN15804)
-    { key: 'ADPE', label: 'ADPE (abiotische uitputting, elementen)', unitHint: 'kg Sb-eq', group: 'Impact' },
-    { key: 'ADPF', label: 'ADPF (abiotische uitputting, fossiel)', unitHint: 'MJ', group: 'Impact' },
-    { key: 'ODP', label: 'ODP (ozonlaag aantasting)', unitHint: 'kg CFC-11-eq', group: 'Impact' },
-    { key: 'POCP', label: 'POCP (fotochemische oxidantvorming)', unitHint: 'kg ethene-eq', group: 'Impact' },
-    { key: 'AP', label: 'AP (verzuring)', unitHint: 'kg SO2-eq', group: 'Impact' },
-    { key: 'EP', label: 'EP (vermesting)', unitHint: 'kg PO4-eq', group: 'Impact' },
-    { key: 'HTP', label: 'HTP (humaan-toxicologisch)', unitHint: 'kg 1,4-DB-eq', group: 'Impact' },
-    { key: 'FAETP', label: 'FAETP (eco-toxicologisch zoetwater)', unitHint: 'kg 1,4-DB-eq', group: 'Impact' },
-    { key: 'MAETP', label: 'MAETP (eco-toxicologisch zeewater)', unitHint: 'kg 1,4-DB-eq', group: 'Impact' },
-    { key: 'TETP', label: 'TETP (eco-toxicologisch terrestisch)', unitHint: 'kg 1,4-DB-eq', group: 'Impact' },
-
-    // Resources (EN15804)
-    { key: 'PERE', label: 'PERE (hernieuwbare primaire energie excl. materiaal)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PERM', label: 'PERM (hernieuwbare primaire energie als materiaal)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PERT', label: 'PERT (totaal hernieuwbare primaire energie)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PENRE', label: 'PENRE (niet-hernieuwbare primaire energie excl. materiaal)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PENRM', label: 'PENRM (niet-hernieuwbare primaire energie als materiaal)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PENRT', label: 'PENRT (totaal niet-hernieuwbare primaire energie)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'PET', label: 'PET (energie primair totaal)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'SM', label: 'SM (secundaire materialen)', unitHint: 'kg', group: 'Resources' },
-    { key: 'RSF', label: 'RSF (hernieuwbare secundaire brandstoffen)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'NRSF', label: 'NRSF (niet-hernieuwbare secundaire brandstoffen)', unitHint: 'MJ', group: 'Resources' },
-    { key: 'FW', label: 'FW (waterverbruik)', unitHint: 'm3', group: 'Resources' },
-
-    // Waste/outputs (EN15804)
-    { key: 'HWD', label: 'HWD (gevaarlijk afval)', unitHint: 'kg', group: 'Waste' },
-    { key: 'NHWD', label: 'NHWD (niet-gevaarlijk afval)', unitHint: 'kg', group: 'Waste' },
-    { key: 'RWD', label: 'RWD (radioactief afval)', unitHint: 'kg', group: 'Waste' },
-    { key: 'CRU', label: 'CRU (materialen voor hergebruik)', unitHint: 'kg', group: 'Waste' },
-    { key: 'MFR', label: 'MFR (materialen voor recycling)', unitHint: 'kg', group: 'Waste' },
-    { key: 'MER', label: 'MER (materialen voor energie)', unitHint: 'kg', group: 'Waste' },
-    { key: 'EE', label: 'EE (geëxporteerde energie)', unitHint: 'MJ', group: 'Waste' },
-    { key: 'EET', label: 'EET (geëxporteerde energie thermisch)', unitHint: 'MJ', group: 'Waste' },
-    { key: 'EEE', label: 'EEE (geëxporteerde energie elektrisch)', unitHint: 'MJ', group: 'Waste' }
-  ];
-
 type ImpactState = Record<string, number | ''>;
-type UnitState = Record<string, string>; // indicator -> unit (bijv. 'kg CO2-eq')
-
-// Key: `${indicator}|${setType}|${stage}`
-const impactKey = (indicator: string, setType: EpdSetType, stage: EpdImpactStage) =>
-  `${indicator}|${setType}|${stage}`;
+type UnitState = Record<string, string>;
 
 export default function UploadPage() {
   const router = useRouter();
@@ -95,6 +30,16 @@ export default function UploadPage() {
 
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
 
+  // impact values + units (units per indicator)
+  const [impactValues, setImpactValues] = useState<ImpactState>({});
+  const [impactUnits, setImpactUnits] = useState<UnitState>(() => {
+    const init: UnitState = {};
+    for (const code of ALL_INDICATOR_CODES) {
+      init[code] = IMPACT_INDICATORS[code].defaultUnit;
+    }
+    return init;
+  });
+
   const [form, setForm] = useState({
     productName: '',
     functionalUnit: '',
@@ -107,22 +52,26 @@ export default function UploadPage() {
     publicationDate: '',
     expirationDate: '',
     verifierName: '',
-    standardSet: 'UNKNOWN' as EpdSetType
+    standardSet: 'UNKNOWN' as EpdSetType,
   });
 
-  const [impactValues, setImpactValues] = useState<ImpactState>({});
-  const [impactUnits, setImpactUnits] = useState<UnitState>({});
+  const impactKey = (indicator: string, setType: EpdSetType, stage: EpdImpactStage) =>
+    `${indicator}|${setType}|${stage}`;
 
-  // Zichtbare categorieën (default: alles wat in PDF gevonden is + MKI + GWP)
-  const [visibleIndicators, setVisibleIndicators] = useState<string[]>(['MKI', 'GWP']);
+  const updateImpact = (indicator: string, setType: EpdSetType, stage: EpdImpactStage, value: string) => {
+    setImpactValues((prev) => ({
+      ...prev,
+      [impactKey(indicator, setType, stage)]: value === '' ? '' : Number(value),
+    }));
+  };
 
   const parseErrorResponse = async (res: Response) => {
     try {
       const data = await res.json();
       if (typeof data?.error === 'string') return data.error;
       if (typeof data?.message === 'string') return data.message;
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Kon foutmelding niet parsen', err);
     }
     return null;
   };
@@ -133,14 +82,7 @@ export default function UploadPage() {
     if (dropped) setFile(dropped);
   };
 
-  const setDefaultUnitsFromHints = () => {
-    const next: UnitState = {};
-    IMPACT_CATEGORIES.forEach((c) => {
-      if (c.unitHint) next[c.key] = c.unitHint;
-    });
-    setImpactUnits((prev) => ({ ...next, ...prev }));
-  };
-
+  // Laad parser-output in formulier + impact state
   const loadParsedIntoForm = (data: ParsedEpd) => {
     setForm({
       productName: data.productName || '',
@@ -154,34 +96,29 @@ export default function UploadPage() {
       publicationDate: data.publicationDate || '',
       expirationDate: data.expirationDate || '',
       verifierName: data.verifierName || '',
-      standardSet: data.standardSet || 'UNKNOWN'
+      standardSet: data.standardSet || 'UNKNOWN',
     });
 
-    // Vul units met hints, daarna overschrijven met units die uit PDF komen
-    setDefaultUnitsFromHints();
+    // impact values
+    const nextValues: ImpactState = {};
+    const nextUnits: UnitState = { ...impactUnits };
 
-    const impactsState: ImpactState = {};
-    const unitsState: UnitState = {};
+    for (const impact of data.impacts || []) {
+      const indicator = String(impact.indicator || '').trim();
+      if (!indicator) continue;
 
-    (data.impacts ?? []).forEach((impact: any) => {
-      // impact.indicator kan bv 'MKI', 'GWP', 'ADPE', ...
-      const ind = String(impact.indicator);
-      impactsState[impactKey(ind, impact.setType, impact.stage)] = impact.value;
-
-      if (impact.unit) {
-        unitsState[ind] = String(impact.unit);
+      // zet units (parser-unit wint)
+      if (impact.unit && indicator) {
+        nextUnits[indicator] = impact.unit;
+      } else if (isKnownIndicator(indicator) && !nextUnits[indicator]) {
+        nextUnits[indicator] = IMPACT_INDICATORS[indicator].defaultUnit;
       }
-    });
 
-    setImpactValues(impactsState);
-    setImpactUnits((prev) => ({ ...prev, ...unitsState }));
+      nextValues[impactKey(indicator, impact.setType, impact.stage)] = impact.value;
+    }
 
-    // Auto: laat alles zien wat in PDF voorkomt, plus MKI/GWP
-    const foundIndicators = Array.from(
-      new Set((data.impacts ?? []).map((i: any) => String(i.indicator)))
-    );
-    const merged = Array.from(new Set(['MKI', 'GWP', ...foundIndicators]));
-    setVisibleIndicators(merged);
+    setImpactUnits(nextUnits);
+    setImpactValues(nextValues);
   };
 
   const uploadFile = async () => {
@@ -198,11 +135,14 @@ export default function UploadPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/epd/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/epd/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
       if (!res.ok) {
-        const msg = await parseErrorResponse(res);
-        throw new Error(msg || 'Upload mislukt');
+        const errorMessage = await parseErrorResponse(res);
+        throw new Error(errorMessage || 'Upload mislukt');
       }
 
       const json = await res.json();
@@ -223,13 +163,6 @@ export default function UploadPage() {
     }
   };
 
-  const updateImpact = (indicator: string, setType: EpdSetType, stage: EpdImpactStage, value: string) => {
-    setImpactValues((prev) => ({
-      ...prev,
-      [impactKey(indicator, setType, stage)]: value === '' ? '' : Number(value)
-    }));
-  };
-
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -245,21 +178,19 @@ export default function UploadPage() {
     setLoading(true);
     setError(null);
 
-    // Maak ParsedImpact[] uit state
-    // LET OP: jouw ParsedImpact type moet indicator als string accepteren en unit ondersteunen.
+    // Maak ParsedImpact[] uit state (incl unit per indicator)
     const impacts: ParsedImpact[] = Object.entries(impactValues)
       .filter(([, value]) => value !== '')
       .map(([key, value]) => {
         const [indicator, setType, stage] = key.split('|');
         return {
-          indicator: indicator ?? '',
-          setType: (setType ?? 'UNKNOWN') as EpdSetType,
-          stage: (stage ?? 'A1') as EpdImpactStage,
+          indicator: indicator as ImpactIndicator,
+          setType: setType as EpdSetType,
+          stage: stage as EpdImpactStage,
           value: Number(value),
           unit: impactUnits[indicator] || '',
         };
       });
-
 
     const customAttributes = customFields.reduce<Record<string, string>>((acc, cur) => {
       if (cur.key) acc[cur.key] = cur.value;
@@ -275,14 +206,11 @@ export default function UploadPage() {
           ...form,
           standardSet: form.standardSet,
           customAttributes,
-          impacts
-        })
+          impacts,
+        }),
       });
 
-      if (!res.ok) {
-        const msg = await parseErrorResponse(res);
-        throw new Error(msg || 'Opslaan mislukt');
-      }
+      if (!res.ok) throw new Error('Opslaan mislukt');
 
       const json = await res.json();
       router.push(`/epd/${json.id}`);
@@ -293,24 +221,66 @@ export default function UploadPage() {
     }
   };
 
-  const indicatorLabel = (key: string) =>
-    IMPACT_CATEGORIES.find((c) => c.key === key)?.label ?? key;
+  // UI helpers: indicator groepen
+  const groupedIndicators = useMemo(() => {
+    const groups: Record<string, ImpactIndicatorCode[]> = {
+      Kern: [],
+      Impact: [],
+      Resources: [],
+      Waste: [],
+    };
 
-  const indicatorGroup = (key: string) =>
-    IMPACT_CATEGORIES.find((c) => c.key === key)?.group ?? 'Impact';
+    for (const code of ALL_INDICATOR_CODES) {
+      const g = IMPACT_INDICATORS[code].group;
+      groups[g].push(code);
+    }
+    return groups;
+  }, []);
 
-  const allIndicatorsInMasterList = useMemo(
-    () => IMPACT_CATEGORIES.map((c) => c.key),
-    []
-  );
+  // Render 1 indicator-table (met values)
+  const renderIndicatorTable = (indicator: ImpactIndicatorCode, setType: EpdSetType) => {
+    const meta = IMPACT_INDICATORS[indicator];
+    const unit = impactUnits[indicator] || meta.defaultUnit;
 
-  const indicatorsToRender = useMemo(() => {
-    // Als user iets typt / PDF een onbekende indicator heeft, willen we die ook kunnen tonen
-    const fromParsed = parsed?.impacts ? Array.from(new Set(parsed.impacts.map((i: any) => String(i.indicator)))) : [];
-    const merged = Array.from(new Set([...allIndicatorsInMasterList, ...fromParsed]));
-    // Alleen de aangevinkte laten zien (maar in vaste volgorde: master eerst, daarna rest)
-    return merged.filter((k) => visibleIndicators.includes(k));
-  }, [parsed, visibleIndicators, allIndicatorsInMasterList]);
+    return (
+      <div key={`${indicator}-${setType}`} className="space-y-2">
+        <div className="flex-between">
+          <div className="text-sm font-semibold">
+            {meta.label} ({indicator})
+          </div>
+          <div className="text-xs text-slate-500">Unit: {unit || '-'}</div>
+        </div>
+
+        <table className="table">
+          <thead>
+            <tr>
+              {stages.map((stage) => (
+                <th key={stage}>{stage.replace('_', '-')}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {stages.map((stage) => {
+                const key = impactKey(indicator, setType, stage);
+                return (
+                  <td key={key}>
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      value={impactValues[key] ?? ''}
+                      onChange={(e) => updateImpact(indicator, setType, stage, e.target.value)}
+                    />
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   const parsedInfo = useMemo(() => {
     if (!parsed) return null;
@@ -329,89 +299,6 @@ export default function UploadPage() {
         </div>
       </div>
     );
-  }, [parsed]);
-
-  const renderImpactTableForSet = (setType: EpdSetType) => {
-    return (
-      <div className="space-y-3">
-        <div className="flex-between">
-          <h4 className="font-semibold">{setType}</h4>
-        </div>
-
-        {indicatorsToRender.length === 0 ? (
-          <p className="text-sm text-slate-600">Selecteer minimaal één impactcategorie om te tonen.</p>
-        ) : (
-          <div className="space-y-4">
-            {indicatorsToRender.map((indicator) => (
-              <div key={`${setType}-${indicator}`} className="space-y-2">
-                <div className="flex-between gap-3">
-                  <div className="text-sm">
-                    <strong>{indicatorLabel(indicator)}</strong>
-                    <span className="text-slate-500"> ({indicator})</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Unit</span>
-                    <input
-                      className="input"
-                      style={{ maxWidth: 180 }}
-                      value={impactUnits[indicator] ?? ''}
-                      onChange={(e) =>
-                        setImpactUnits((prev) => ({ ...prev, [indicator]: e.target.value }))
-                      }
-                      placeholder="bijv. kg CO2-eq"
-                    />
-                  </div>
-                </div>
-
-                <table className="table">
-                  <thead>
-                    <tr>
-                      {stages.map((stage) => (
-                        <th key={stage}>{stage.replace('_', '-')}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {stages.map((stage) => {
-                        const key = impactKey(indicator, setType, stage);
-                        return (
-                          <td key={key}>
-                            <input
-                              type="number"
-                              step="0.000001"
-                              className="input"
-                              value={impactValues[key] ?? ''}
-                              onChange={(e) => updateImpact(indicator, setType, stage, e.target.value)}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const groupedIndicatorOptions = useMemo(() => {
-    const groups: Record<string, string[]> = { Kern: [], Impact: [], Resources: [], Waste: [] };
-    IMPACT_CATEGORIES.forEach((c) => groups[c.group].push(c.key));
-
-    // Voeg eventueel onbekende indicators uit PDF toe (in Impact groep)
-    const fromParsed = parsed?.impacts ? Array.from(new Set(parsed.impacts.map((i: any) => String(i.indicator)))) : [];
-    fromParsed.forEach((k) => {
-      if (!IMPACT_CATEGORIES.some((c) => c.key === k)) {
-        groups.Impact.push(k);
-      }
-    });
-
-    return groups;
   }, [parsed]);
 
   return (
@@ -515,7 +402,7 @@ export default function UploadPage() {
               placeholder="bijv. NMD v3.5"
             />
           </label>
-          
+
           <label className="space-y-1">
             <span className="text-sm">EcoInvent versie</span>
             <input
@@ -525,7 +412,6 @@ export default function UploadPage() {
               placeholder="bijv. EcoInvent v3.6"
             />
           </label>
-
 
           <label className="space-y-1">
             <span className="text-sm">Datum publicatie</span>
@@ -573,73 +459,25 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div className="card space-y-3">
-        <div className="flex-between gap-3">
-          <div>
-            <h3 className="font-semibold">Impactcategorieën</h3>
-            <p className="text-sm text-slate-600">
-              Kies welke categorieën zichtbaar zijn. (Alles wordt opgeslagen als je waarden invult.)
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setVisibleIndicators(Array.from(new Set(IMPACT_CATEGORIES.map((c) => c.key))))}
-            >
-              Alles tonen
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setVisibleIndicators(['MKI', 'GWP'])}
-            >
-              Alleen kern
-            </button>
-          </div>
-        </div>
-
-        <div className="grid-two">
-          {(['Kern', 'Impact', 'Resources', 'Waste'] as const).map((grp) => (
-            <div className="card" key={grp}>
-              <h4 className="font-semibold">{grp}</h4>
-              <div className="mt-2 space-y-1">
-                {(groupedIndicatorOptions[grp] ?? []).map((k) => {
-                  const checked = visibleIndicators.includes(k);
-                  return (
-                    <label key={k} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          setVisibleIndicators((prev) => {
-                            if (prev.includes(k)) return prev.filter((x) => x !== k);
-                            return [...prev, k];
-                          });
-                        }}
-                      />
-                      <span>{indicatorLabel(k)}</span>
-                      <span className="text-slate-500">({k})</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
+      {/* IMPACT TABELLEN */}
       <div className="card space-y-4">
         <h3 className="font-semibold">Impactwaarden (per set)</h3>
 
-        <div className="space-y-6">
-          {(['SBK_SET_1', 'SBK_SET_2'] as EpdSetType[]).map((setType) => (
-            <div key={setType} className="space-y-2">
-              {renderImpactTableForSet(setType)}
-            </div>
-          ))}
+        {/* Set 1 */}
+        <div className="space-y-4">
+          <h4 className="font-semibold">SBK_SET_1</h4>
+          {ALL_INDICATOR_CODES.map((code) => renderIndicatorTable(code, 'SBK_SET_1'))}
         </div>
+
+        {/* Set 2 */}
+        <div className="space-y-4 pt-6 border-t">
+          <h4 className="font-semibold">SBK_SET_2</h4>
+          {ALL_INDICATOR_CODES.map((code) => renderIndicatorTable(code, 'SBK_SET_2'))}
+        </div>
+
+        <p className="text-xs text-slate-500">
+          Tip: als een categorie niet automatisch uit de PDF komt, vul hem handmatig in. Later verbeteren we de parser.
+        </p>
       </div>
 
       <div className="card space-y-3">
@@ -654,9 +492,7 @@ export default function UploadPage() {
           </button>
         </div>
 
-        {customFields.length === 0 && (
-          <p className="text-sm text-slate-600">Geen extra velden toegevoegd.</p>
-        )}
+        {customFields.length === 0 && <p className="text-sm text-slate-600">Geen extra velden toegevoegd.</p>}
 
         <div className="space-y-2">
           {customFields.map((field, idx) => (
@@ -706,13 +542,6 @@ export default function UploadPage() {
         <button type="button" className="button button-secondary" onClick={() => router.push('/epd')}>
           Annuleren
         </button>
-      </div>
-
-      <div className="text-xs text-slate-500">
-        <p>
-          Tip: als een categorie niet automatisch uit de PDF komt, vink hem aan en vul handmatig in.
-          Later verbeteren we de parser zodat dit steeds beter automatisch gaat.
-        </p>
       </div>
     </form>
   );
