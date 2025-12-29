@@ -3,7 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
-import { ALL_INDICATOR_CODES, IMPACT_INDICATORS, isKnownIndicator, ImpactIndicatorCode } from '@/lib/impactIndicators';
+import {
+  ALL_INDICATOR_CODES,
+  IMPACT_INDICATORS,
+  INDICATOR_CODES_SET_1,
+  INDICATOR_CODES_SET_2,
+  isKnownIndicator,
+  ImpactIndicatorCode,
+} from '@/lib/impactIndicators';
 
 const stages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
 
@@ -481,13 +488,13 @@ export default function UploadPage() {
         {/* Set 1 */}
         <div className="space-y-4">
           <h4 className="font-semibold">SBK_SET_1</h4>
-          {ALL_INDICATOR_CODES.map((code) => renderIndicatorTable(code, 'SBK_SET_1'))}
+          {INDICATOR_CODES_SET_1.map((code) => renderIndicatorTable(code, 'SBK_SET_1'))}
         </div>
 
         {/* Set 2 */}
         <div className="space-y-4 pt-6 border-t">
           <h4 className="font-semibold">SBK_SET_2</h4>
-          {ALL_INDICATOR_CODES.map((code) => renderIndicatorTable(code, 'SBK_SET_2'))}
+          {INDICATOR_CODES_SET_2.map((code) => renderIndicatorTable(code, 'SBK_SET_2'))}
         </div>
 
         <p className="text-xs text-slate-500">
