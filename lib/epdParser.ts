@@ -144,9 +144,8 @@ const knownIndicators = new Set([
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
-// matches scientific notation with comma decimals: 3,655E+0 , also simple 0 or 000000
-const NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/g;
-const FIRST_NUM_RE = /[+-]?\d+(?:,\d+)?E[+-]?\d+|[+-]?\d+(?:,\d+)?/;
+// matches scientific notation with comma/dot decimals: 3,655E+0 or 3.655E+0
+const NUM_RE = /[+-]?\d+(?:[.,]\d+)?(?:E[+-]?\d+)?/gi;
 
 function parseNumberToken(tok: string): number | undefined {
   const t = tok.trim();
@@ -160,6 +159,91 @@ function parseNumberToken(tok: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function isAlpha(ch: string | undefined): boolean {
+  if (!ch) return false;
+  return /[a-z]/i.test(ch);
+}
+
+function shouldAcceptToken(text: string, start: number, end: number): boolean {
+  const prev = text[start - 1];
+  const next = text[end];
+  const next2 = text[end + 1];
+  const prevNonSpace = text.slice(0, start).trimEnd().slice(-1);
+  const nextNonSpace = text.slice(end).trimStart()[0];
+  const nextNonSpace2 = text.slice(end).trimStart()[1];
+  const token = text.slice(start, end);
+
+  if (isAlpha(prev)) return false;
+  if (isAlpha(prevNonSpace) && /^\d$/.test(text.slice(start, end)) && nextNonSpace === '-') return false;
+  if (isAlpha(prevNonSpace) && /^\d$/.test(token)) return false;
+  if (/^\d$/.test(token) && (nextNonSpace === '-' || nextNonSpace === '−')) return false;
+  if (isAlpha(next)) return false;
+  if (next === '-' && isAlpha(next2)) return false;
+  if (nextNonSpace === '-' && isAlpha(nextNonSpace2)) return false;
+  return true;
+}
+
+function shouldAcceptFirstToken(text: string, start: number, end: number, token: string): boolean {
+  const prev = text[start - 1];
+  const next = text[end];
+  const next2 = text[end + 1];
+  const prevNonSpace = text.slice(0, start).trimEnd().slice(-1);
+  const nextNonSpace = text.slice(end).trimStart()[0];
+  const nextNonSpace2 = text.slice(end).trimStart()[1];
+
+  if (isAlpha(next)) return false;
+  if (next === '-' && isAlpha(next2)) return false;
+  if (nextNonSpace === '-' && isAlpha(nextNonSpace2)) return false;
+  if (isAlpha(prev)) {
+    return /e/i.test(token);
+  }
+  if (isAlpha(prevNonSpace) && /^\d$/.test(token)) return false;
+  if (/^\d$/.test(token) && (nextNonSpace === '-' || nextNonSpace === '−')) return false;
+  return true;
+}
+
+function extractNumberTokens(text: string): string[] {
+  const tokens: string[] = [];
+  const re = new RegExp(NUM_RE.source, 'gi');
+  let match = re.exec(text);
+  while (match) {
+    const token = match[0];
+    if (token) {
+      const index = match.index ?? 0;
+      const end = index + token.length;
+      if (shouldAcceptToken(text, index, end)) {
+        tokens.push(token);
+      }
+    }
+    match = re.exec(text);
+  }
+  return tokens;
+}
+
+function insertConcatenatedSeparators(text: string): string {
+  const withZeros = text.replace(/E([+-]?\d)(0{1,})(?=\d[.,])/gi, (_match, exp, zeros) => {
+    const spacedZeros = Array(zeros.length).fill('0').join(' ');
+    return `E${exp} ${spacedZeros} `;
+  });
+  return withZeros.replace(/E([+-]?\d)(?=\d[.,])/gi, 'E$1 ');
+}
+
+function expandLeadingZeroTokens(tokens: string[]): string[] {
+  const expanded: string[] = [];
+  for (const token of tokens) {
+    const match = token.match(/^(0{2,})(\d[.,].*)$/);
+    if (match) {
+      const zeros = match[1].length;
+      for (let i = 0; i < zeros; i += 1) {
+        expanded.push('0');
+      }
+      expanded.push(match[2]);
+      continue;
+    }
+    expanded.push(token);
+  }
+  return expanded;
+}
 /**
  * Pak de “Resultaten -> Milieu-impact SBK set X ...” sectie als substring,
  * zodat we NIET per ongeluk de definities (EET=...) pakken.
@@ -242,24 +326,50 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     // maak unit+numbers één string, maar behoud spaties
     const compact = rest.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
 
-    const m = compact.match(FIRST_NUM_RE);
-    if (!m || m.index === undefined) continue;
+    let firstIndex: number | undefined;
+    const firstRe = new RegExp(NUM_RE.source, 'gi');
+    let firstMatch = firstRe.exec(compact);
+    while (firstMatch) {
+      const token = firstMatch[0];
+      if (token) {
+        const index = firstMatch.index ?? 0;
+        const end = index + token.length;
+        if (shouldAcceptFirstToken(compact, index, end, token)) {
+          firstIndex = index;
+          break;
+        }
+      }
+      firstMatch = firstRe.exec(compact);
+    }
+    if (firstIndex === undefined) continue;
 
-    const unitRaw = compact.slice(0, m.index).trim();
-    const numsRaw = compact.slice(m.index).trim();
+    const unitRaw = compact.slice(0, firstIndex).trim();
+    const numsRaw = insertConcatenatedSeparators(compact.slice(firstIndex).trim());
 
     // extract numbers (A1 A2 A3 A1-A3 D Totaal) -> we nemen eerste 5
-    const tokens = numsRaw.match(NUM_RE) || [];
+    let tokens = extractNumberTokens(numsRaw);
+    if (tokens.length < 3 && /^0+$/.test(numsRaw.replace(/\s+/g, ''))) {
+      tokens = Array(5).fill('0');
+    }
+    tokens = expandLeadingZeroTokens(tokens);
     const nums: number[] = [];
     for (const t of tokens) {
       const n = parseNumberToken(t);
       if (n === undefined) continue;
       nums.push(n);
-      if (nums.length >= 5) break;
     }
-    if (nums.length < 3) continue;
 
-    out.push({ indicator, unit: unitRaw, nums });
+    let normalizedNums = nums.slice(0, 5);
+    if (normalizedNums.length === 2) {
+      normalizedNums = [normalizedNums[0], 0, 0, normalizedNums[1], 0];
+    } else if (normalizedNums.length === 3) {
+      normalizedNums = [normalizedNums[0], 0, 0, normalizedNums[1], normalizedNums[2]];
+    } else if (normalizedNums.length === 4) {
+      normalizedNums = [normalizedNums[0], normalizedNums[1], normalizedNums[2], normalizedNums[3], 0];
+    }
+    if (normalizedNums.length < 1) continue;
+
+    out.push({ indicator, unit: unitRaw, nums: normalizedNums });
   }
 
   return out;
