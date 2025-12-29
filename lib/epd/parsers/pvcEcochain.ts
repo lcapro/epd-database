@@ -133,6 +133,8 @@ export const pvcEcochainParser = {
     const hasEci = results.some((row) => row.indicator === 'ECI');
     const mkiRow = results.find((row) => row.indicator === 'MKI');
     const eciRow = results.find((row) => row.indicator === 'ECI');
+    const rowHasValues = (row: typeof results[number] | undefined) =>
+      !!row && Object.values(row.values).some((value) => value !== null && value !== undefined);
     if (!hasEci && mkiRow) {
       results = [
         {
@@ -142,7 +144,8 @@ export const pvcEcochainParser = {
         ...results,
       ];
     }
-    if (!mkiRow && eciRow) {
+    if (eciRow && (!mkiRow || !rowHasValues(mkiRow))) {
+      results = results.filter((row) => row.indicator !== 'MKI');
       results = [
         {
           ...eciRow,
