@@ -351,10 +351,10 @@ export default function UploadPage() {
           {file && <p className="text-sm mt-2">Geselecteerd: {file.name}</p>}
         </div>
 
-        {parsedInfo}
-        {error && <div className="text-red-600 text-sm">{error}</div>}
-        {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
-      </div>
+      {parsedInfo}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
+      {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
+    </div>
 
       <div className="card space-y-3">
         <h3 className="font-semibold">Basisgegevens</h3>

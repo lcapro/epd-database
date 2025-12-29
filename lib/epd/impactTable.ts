@@ -103,6 +103,10 @@ function detectIndicator(line: string): string | undefined {
       return indicator;
     }
   }
+  for (const indicator of orderedIndicators) {
+    const regex = new RegExp(`\\(${indicator}\\)`, 'i');
+    if (regex.test(trimmed)) return indicator;
+  }
   return undefined;
 }
 
@@ -121,13 +125,28 @@ function findIndicatorInLine(line: string): { indicator: string; index: number }
       best = { indicator, index };
     }
   }
-  return best;
+  if (best) return best;
+  for (const indicator of orderedIndicators) {
+    const regex = new RegExp(`\\(${indicator}\\)`, 'i');
+    const match = regex.exec(line);
+    if (!match) continue;
+    const index = match.index ?? 0;
+    return { indicator, index };
+  }
+  return undefined;
 }
 
 function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {
-  const startRe = new RegExp(`(results|resultaten)[\\s/]*.*sbk\\s*set\\s*${setNo}`, 'i');
-  const startIdx = text.search(startRe);
-  if (startIdx < 0) return undefined;
+  const startRe = new RegExp(
+    `(results|resultaten|environmental impact|milieu-?impact)?[\\s/]*.*sbk[\\s_-]*set[\\s_-]*${setNo}`,
+    'i'
+  );
+  let startIdx = text.search(startRe);
+  if (startIdx < 0) {
+    const fallbackRe = new RegExp(`sbk[\\s_-]*set[\\s_-]*${setNo}`, 'i');
+    startIdx = text.search(fallbackRe);
+    if (startIdx < 0) return undefined;
+  }
 
   const endIdxCandidates = [
     text.toLowerCase().indexOf('ecochain technologies', startIdx),
@@ -136,6 +155,24 @@ function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined
 
   const endIdx = endIdxCandidates.length ? Math.min(...endIdxCandidates) : Math.min(text.length, startIdx + 14000);
   return text.slice(startIdx, endIdx);
+}
+
+function sliceFallbackSection(text: string, setType: EpdSetType): string | undefined {
+  const lower = text.toLowerCase();
+  const impactIdx = lower.search(/environmental impact|milieu-?impact/);
+  if (impactIdx < 0) return undefined;
+
+  if (setType === 'SBK_SET_2') {
+    const endCandidates = [
+      lower.indexOf('resource use', impactIdx),
+      lower.indexOf('resource consumption', impactIdx),
+      lower.indexOf('resource useunit', impactIdx),
+    ].filter((idx) => idx >= 0);
+    const endIdx = endCandidates.length ? Math.min(...endCandidates) : text.length;
+    return text.slice(impactIdx, endIdx);
+  }
+
+  return text.slice(impactIdx);
 }
 
 function extractModuleHeader(lines: string[]): string[] {
@@ -199,14 +236,21 @@ function extractRowTokens(line: string, indicator?: string): { unit: string; tok
   return { unit, tokens: rawTokens };
 }
 
-export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
+export function parseImpactTableDynamic(
+  text: string,
+  setType: EpdSetType,
+  options?: { allowFallbackSection?: boolean }
+): {
   modules: EpdImpactStage[];
   results: EpdResult[];
   mndModules: Set<string>;
 } {
   const setNo: '1' | '2' = setType === 'SBK_SET_2' ? '2' : '1';
   const normalized = normalizePreserveLines(text);
-  const section = sliceResultsSection(normalized, setNo);
+  let section = sliceResultsSection(normalized, setNo);
+  if (!section && options?.allowFallbackSection) {
+    section = sliceFallbackSection(normalized, setType);
+  }
   if (!section) return { modules: [], results: [], mndModules: new Set() };
 
   const lines = section.split('\n').map((l) => l.trim()).filter(Boolean);
