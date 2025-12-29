@@ -1,7 +1,7 @@
 // lib/types.ts
 import type { ImpactIndicatorCode } from './impactIndicators';
 
-export type EpdImpactStage = 'A1' | 'A2' | 'A3' | 'A1-A3' | 'D';
+export type EpdImpactStage = string;
 
 export type EpdSetType = 'UNKNOWN' | 'SBK_SET_1' | 'SBK_SET_2' | 'SBK_BOTH';
 
@@ -13,6 +13,56 @@ export type ParsedImpact = {
   stage: EpdImpactStage;
   value: number;
   unit?: string;
+};
+
+export type LcaStandardVersion = '1.0' | '1.1' | '1.2';
+
+export type LcaStandard = {
+  name: 'NMD Bepalingsmethode';
+  version?: LcaStandardVersion;
+  raw?: string;
+  editionYear?: string;
+};
+
+export type PcrInfo = {
+  name: string;
+  version?: string;
+};
+
+export type ModuleDeclaration = {
+  module: string;
+  declared: boolean;
+  mnd?: boolean;
+};
+
+export type EpdResult = {
+  indicator: ImpactIndicator;
+  unit?: string;
+  setType: EpdSetType;
+  values: Record<string, number | null>;
+};
+
+export type EpdNormalized = {
+  productName?: string;
+  declaredUnit?: string;
+  manufacturer?: string;
+  issueDate?: string;
+  validUntil?: string;
+
+  pcr?: PcrInfo;
+  lcaStandard: LcaStandard;
+
+  verified?: boolean;
+  verifier?: string;
+
+  database?: string;
+
+  modulesDeclared: ModuleDeclaration[];
+  results: EpdResult[];
+  impacts: ParsedImpact[];
+  standardSet: EpdSetType;
+
+  rawExtract?: Record<string, unknown>;
 };
 
 export type ParsedEpd = {
