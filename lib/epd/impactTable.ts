@@ -118,6 +118,7 @@ function insertDecimalSeparators(text: string): string {
 
 function extractRowTokens(line: string, indicator?: string): { unit: string; tokens: string[] } | null {
   const compact = line.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const forceFirstToken = indicator && ['ECI', 'MKI'].includes(indicator.toUpperCase());
   const firstRe = new RegExp(TOKEN_RE.source, 'gi');
   let firstIndex: number | undefined;
   let firstMatch = firstRe.exec(compact);
@@ -126,6 +127,10 @@ function extractRowTokens(line: string, indicator?: string): { unit: string; tok
     if (token) {
       const index = firstMatch.index ?? 0;
       const end = index + token.length;
+      if (forceFirstToken) {
+        firstIndex = index;
+        break;
+      }
       if (/^MND$/i.test(token) || shouldAcceptFirstToken(compact, index, end, token)) {
         firstIndex = index;
         break;
