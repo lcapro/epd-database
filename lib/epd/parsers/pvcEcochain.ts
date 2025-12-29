@@ -126,9 +126,15 @@ export const pvcEcochainParser = {
       firstMatch(text, [/pcr[:\s]*([^\n]+)/i]);
 
     const standardSet = detectStandardSet(text);
-    const setType = standardSet === 'SBK_SET_2' ? 'SBK_SET_2' : 'SBK_SET_1';
+    const hasSet2Indicators = /gwp-total|gwp-f|gwp-b|gwp-luluc|ep-fw|ep-m|ep-t|adp-mm|adp-f|wdp|pm|ir|etp-fw|htp-c|htp-nc|sqp/i.test(
+      text
+    );
+    const derivedSet = standardSet === 'UNKNOWN' && hasSet2Indicators ? 'SBK_SET_2' : standardSet;
+    const setType = derivedSet === 'SBK_SET_2' ? 'SBK_SET_2' : 'SBK_SET_1';
 
-    let { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
+    let { results, modules, mndModules } = parseImpactTableDynamic(text, setType, {
+      allowFallbackSection: standardSet === 'UNKNOWN' || derivedSet === 'SBK_SET_2',
+    });
 
     const mkiRow = results.find((row) => row.indicator === 'MKI');
     const eciRow = results.find((row) => row.indicator === 'ECI');
@@ -176,7 +182,7 @@ export const pvcEcochainParser = {
         modulesDeclared: buildModules(modules, mndModules),
         results,
         impacts: [],
-        standardSet,
+        standardSet: derivedSet,
         rawExtract: {
           address,
           databaseEcoinventVersion: ecoinvent,

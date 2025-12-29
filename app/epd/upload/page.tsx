@@ -31,6 +31,7 @@ export default function UploadPage() {
   const [parsed, setParsed] = useState<ParsedEpd | null>(null);
   const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
+  const [rawText, setRawText] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +171,7 @@ export default function UploadPage() {
       const json = await res.json();
       setFileId(json.fileId);
       setParsed(json.parsedEpd ?? null);
+      setRawText(typeof json.rawText === 'string' ? json.rawText : '');
 
       if (json.parseError) {
         setParseWarning(`Kon PDF-tekst niet uitlezen: ${json.parseError}. Vul de velden handmatig in.`);
@@ -351,9 +353,23 @@ export default function UploadPage() {
           {file && <p className="text-sm mt-2">Geselecteerd: {file.name}</p>}
         </div>
 
-        {parsedInfo}
-        {error && <div className="text-red-600 text-sm">{error}</div>}
-        {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
+      {parsedInfo}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
+      {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
+    </div>
+
+      <div className="card space-y-3">
+        <div className="flex-between">
+          <div>
+            <h3 className="font-semibold">Raw tekst uit PDF</h3>
+            <p className="text-sm text-slate-600">De uitgelezen tekst wordt gebruikt om impactwaarden te parseren.</p>
+          </div>
+        </div>
+        {rawText ? (
+          <textarea className="input font-mono text-xs h-48" readOnly value={rawText} />
+        ) : (
+          <p className="text-sm text-slate-500">Nog geen raw tekst beschikbaar. Verwerk eerst een PDF.</p>
+        )}
       </div>
 
       <div className="card space-y-3">
