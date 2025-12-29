@@ -130,26 +130,24 @@ export const pvcEcochainParser = {
 
     let { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
 
-    const hasEci = results.some((row) => row.indicator === 'ECI');
     const mkiRow = results.find((row) => row.indicator === 'MKI');
     const eciRow = results.find((row) => row.indicator === 'ECI');
     const rowHasValues = (row: typeof results[number] | undefined) =>
       !!row && Object.values(row.values).some((value) => value !== null && value !== undefined);
-    if (!hasEci && mkiRow) {
-      results = [
-        {
-          ...mkiRow,
-          indicator: 'ECI',
-        },
-        ...results,
-      ];
-    }
-    if (eciRow && (!mkiRow || !rowHasValues(mkiRow))) {
+    if (eciRow && rowHasValues(eciRow)) {
       results = results.filter((row) => row.indicator !== 'MKI');
       results = [
         {
           ...eciRow,
           indicator: 'MKI',
+        },
+        ...results,
+      ];
+    } else if (mkiRow) {
+      results = [
+        {
+          ...mkiRow,
+          indicator: 'ECI',
         },
         ...results,
       ];
