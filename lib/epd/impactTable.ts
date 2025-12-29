@@ -59,6 +59,21 @@ function detectIndicator(line: string): string | undefined {
   return undefined;
 }
 
+function findIndicatorInLine(line: string): { indicator: string; index: number } | undefined {
+  for (const indicator of orderedIndicators) {
+    const regex = new RegExp(`\\b${indicator}\\b`, 'i');
+    const match = regex.exec(line);
+    if (!match) continue;
+    const index = match.index ?? 0;
+    const slice = line.slice(index);
+    const nextChar = slice.slice(indicator.length, indicator.length + 1);
+    if (nextChar === '-') continue;
+    if (indicator === 'GWP' && /gwp-?luluc/i.test(slice)) continue;
+    return { indicator, index };
+  }
+  return undefined;
+}
+
 function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {
   const startRe = new RegExp(`(results|resultaten)[\\s/]*.*sbk\\s*set\\s*${setNo}`, 'i');
   const startIdx = text.search(startRe);
@@ -138,15 +153,23 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
   const results: EpdResult[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
+    let workingLine = line;
+    let indicator = detectIndicator(workingLine);
+    if (!indicator) {
+      const found = findIndicatorInLine(workingLine);
+      if (found) {
+        workingLine = workingLine.slice(found.index);
+        indicator = found.indicator;
+      }
+    }
     const lowerLine = line.toLowerCase();
     const headerTokens = Array.from(line.matchAll(moduleRegex)).map((m) => m[1]);
-    if (lowerLine.includes('environmental impact') || (lowerLine.includes('unit') && headerTokens.length >= 3)) {
+    if (!indicator && (lowerLine.includes('environmental impact') || (lowerLine.includes('unit') && headerTokens.length >= 3))) {
       continue;
     }
-    const indicator = detectIndicator(line);
     if (!indicator) continue;
 
-    let buffer = line;
+    let buffer = workingLine;
     let j = i + 1;
     while (j < lines.length) {
       const next = lines[j];
