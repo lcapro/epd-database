@@ -1,6 +1,6 @@
 // lib/impactIndicators.ts
 
-export const IMPACT_INDICATORS = {
+export const IMPACT_INDICATORS_SET_1 = {
   // Core
   MKI: { label: 'MKI', group: 'Kern', defaultUnit: 'Euro' },
   GWP: { label: 'GWP (klimaatverandering)', group: 'Kern', defaultUnit: 'kg CO2-eq' },
@@ -42,10 +42,41 @@ export const IMPACT_INDICATORS = {
   EEE: { label: 'EEE (geëxporteerde energie elektrisch)', group: 'Waste', defaultUnit: 'MJ' },
 } as const;
 
+export const IMPACT_INDICATORS_SET_2 = {
+  MKI: { label: 'MKI', group: 'Kern', defaultUnit: 'Euro' },
+  'GWP-TOTAL': { label: 'GWP-total (klimaatverandering totaal)', group: 'Impact', defaultUnit: 'kg CO2-eq' },
+  'GWP-F': { label: 'GWP-fossiel (klimaatverandering fossiel)', group: 'Impact', defaultUnit: 'kg CO2-eq' },
+  'GWP-B': { label: 'GWP-biogeen (klimaatverandering biogeen)', group: 'Impact', defaultUnit: 'kg CO2-eq' },
+  'GWP-LULUC': {
+    label: 'GWP-LULUC (klimaatverandering landgebruik en landgebruiksverandering)',
+    group: 'Impact',
+    defaultUnit: 'kg CO2-eq',
+  },
+  ODP: { label: 'ODP (ozonlaag aantasting)', group: 'Impact', defaultUnit: 'kg CFC-11-eq' },
+  AP: { label: 'AP (verzuring)', group: 'Impact', defaultUnit: 'mol H+-eq' },
+  'EP-FW': { label: 'EP-FW (vermesting zoetwater)', group: 'Impact', defaultUnit: 'kg P-eq' },
+  'EP-M': { label: 'EP-M (vermesting zeewater)', group: 'Impact', defaultUnit: 'kg N-eq' },
+  'EP-T': { label: 'EP-T (vermesting terrestrisch)', group: 'Impact', defaultUnit: 'mol N-eq' },
+  POCP: { label: 'POCP (fotochemische oxidantvorming)', group: 'Impact', defaultUnit: 'kg NMVOC-eq' },
+  'ADP-MM': { label: 'ADP-MM (abiotische uitputting, mineralen en metalen)', group: 'Impact', defaultUnit: 'kg Sb-eq' },
+  'ADP-F': { label: 'ADP-F (abiotische uitputting, fossiel)', group: 'Impact', defaultUnit: 'MJ' },
+  WDP: { label: 'WDP (waterdepletie)', group: 'Impact', defaultUnit: 'm3' },
+  PM: { label: 'PM (fijnstof)', group: 'Impact', defaultUnit: 'disease inc.' },
+  IR: { label: 'IR (ioniserende straling)', group: 'Impact', defaultUnit: 'kBq U235-eq' },
+  'ETP-FW': { label: 'ETP-FW (eco-toxicologisch zoetwater)', group: 'Impact', defaultUnit: 'CTUe' },
+  'HTP-C': { label: 'HTP-C (humaan-toxicologisch carcinogeen)', group: 'Impact', defaultUnit: 'CTUh' },
+  'HTP-NC': { label: 'HTP-NC (humaan-toxicologisch niet-carcinogeen)', group: 'Impact', defaultUnit: 'CTUh' },
+  SQP: { label: 'SQP (bodemkwaliteit)', group: 'Impact', defaultUnit: '-' },
+} as const;
+
+export const IMPACT_INDICATORS = { ...IMPACT_INDICATORS_SET_1, ...IMPACT_INDICATORS_SET_2 } as const;
+
 export type ImpactIndicatorCode = keyof typeof IMPACT_INDICATORS;
 export type ImpactGroup = (typeof IMPACT_INDICATORS)[ImpactIndicatorCode]['group'];
 
 export const ALL_INDICATOR_CODES = Object.keys(IMPACT_INDICATORS) as ImpactIndicatorCode[];
+export const INDICATOR_CODES_SET_1 = Object.keys(IMPACT_INDICATORS_SET_1) as ImpactIndicatorCode[];
+export const INDICATOR_CODES_SET_2 = Object.keys(IMPACT_INDICATORS_SET_2) as ImpactIndicatorCode[];
 
 export function isKnownIndicator(code: string): code is ImpactIndicatorCode {
   return Object.prototype.hasOwnProperty.call(IMPACT_INDICATORS, code);
