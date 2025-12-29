@@ -103,6 +103,10 @@ function detectIndicator(line: string): string | undefined {
       return indicator;
     }
   }
+  for (const indicator of orderedIndicators) {
+    const regex = new RegExp(`\\(${indicator}\\)`, 'i');
+    if (regex.test(trimmed)) return indicator;
+  }
   return undefined;
 }
 
@@ -121,7 +125,15 @@ function findIndicatorInLine(line: string): { indicator: string; index: number }
       best = { indicator, index };
     }
   }
-  return best;
+  if (best) return best;
+  for (const indicator of orderedIndicators) {
+    const regex = new RegExp(`\\(${indicator}\\)`, 'i');
+    const match = regex.exec(line);
+    if (!match) continue;
+    const index = match.index ?? 0;
+    return { indicator, index };
+  }
+  return undefined;
 }
 
 function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {

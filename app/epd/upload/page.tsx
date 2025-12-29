@@ -359,20 +359,6 @@ export default function UploadPage() {
     </div>
 
       <div className="card space-y-3">
-        <div className="flex-between">
-          <div>
-            <h3 className="font-semibold">Raw tekst uit PDF</h3>
-            <p className="text-sm text-slate-600">De uitgelezen tekst wordt gebruikt om impactwaarden te parseren.</p>
-          </div>
-        </div>
-        {rawText ? (
-          <textarea className="input font-mono text-xs h-48" readOnly value={rawText} />
-        ) : (
-          <p className="text-sm text-slate-500">Nog geen raw tekst beschikbaar. Verwerk eerst een PDF.</p>
-        )}
-      </div>
-
-      <div className="card space-y-3">
         <h3 className="font-semibold">Basisgegevens</h3>
         <div className="grid-two gap-3">
           <label className="space-y-1">
