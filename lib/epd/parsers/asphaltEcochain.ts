@@ -243,9 +243,13 @@ function expandLeadingZeroTokens(tokens: string[]): string[] {
  * zodat we NIET per ongeluk de definities (EET=...) pakken.
  */
 function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {
-  const startRe = new RegExp(`milieu-?impact\\s*sbk\\s*set\\s*${setNo}`, 'i');
-  const startIdx = text.search(startRe);
-  if (startIdx < 0) return undefined;
+  const startRe = new RegExp(`milieu-?impact\\s*sbk[\\s_-]*set[\\s_-]*${setNo}`, 'i');
+  let startIdx = text.search(startRe);
+  if (startIdx < 0) {
+    const fallbackRe = new RegExp(`sbk[\\s_-]*set[\\s_-]*${setNo}`, 'i');
+    startIdx = text.search(fallbackRe);
+    if (startIdx < 0) return undefined;
+  }
 
   // eindigt meestal bij "Ecochain Technologies" footer
   const endIdxCandidates = [
