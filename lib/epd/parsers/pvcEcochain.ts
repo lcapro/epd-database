@@ -1,0 +1,112 @@
+import type { EpdNormalized, ModuleDeclaration } from '../../types';
+import { normalizeLcaStandard, normalizePcrInfo } from '../normalize';
+import { detectStandardSet } from '../standards';
+import { dateFromText, firstMatch, getLineValue, normalizePreserveLines } from '../textUtils';
+import { parseImpactTableDynamic } from '../impactTable';
+
+function extractManufacturerWithAddress(text: string): { manufacturer?: string; address?: string } {
+  const manufacturer =
+    getLineValue(text, ['Manufacturer', 'Producent', 'Producer']) ||
+    firstMatch(text, [/manufacturer[:\s]*([^\n]+)/i, /producent[:\s]*([^\n]+)/i]);
+
+  const address = getLineValue(text, ['Address', 'Adres']) || firstMatch(text, [/address[:\s]*([^\n]+)/i]);
+
+  return { manufacturer, address };
+}
+
+function parseVerified(text: string): { verified?: boolean; verifier?: string } {
+  const verifiedRaw =
+    getLineValue(text, ['Verified', 'Verified by', 'Geverifieerd']) ||
+    firstMatch(text, [/verified[:\s]*([^\n]+)/i]);
+
+  const verifier =
+    getLineValue(text, ['Verifier', 'Verificateur', 'Toetser']) ||
+    firstMatch(text, [/verifier[:\s]*([^\n]+)/i, /verificateur[:\s]*([^\n]+)/i]);
+
+  if (!verifiedRaw) return { verifier };
+  const normalized = verifiedRaw.toLowerCase();
+  if (['yes', 'ja', 'true'].some((v) => normalized.includes(v))) return { verified: true, verifier };
+  if (['no', 'nee', 'false'].some((v) => normalized.includes(v))) return { verified: false, verifier };
+  return { verifier };
+}
+
+function buildModules(modules: string[], mndModules: Set<string>): ModuleDeclaration[] {
+  return modules.map((module) => ({
+    module,
+    declared: !mndModules.has(module),
+    mnd: mndModules.has(module) || undefined,
+  }));
+}
+
+export const pvcEcochainParser = {
+  id: 'pvcEcochainV1',
+  canParse: (input: { text: string }) => {
+    const lower = input.text.toLowerCase();
+    let score = 0;
+    if (lower.includes('ecochain v3.')) score += 0.4;
+    if (lower.includes('u3 pipe') || lower.includes('pvc')) score += 0.5;
+    if (lower.includes('results') && lower.includes('environmental impact')) score += 0.1;
+    return {
+      score,
+      reason: score ? 'Herken Ecochain PVC pijp layout' : 'Geen duidelijke PVC Ecochain signalen',
+    };
+  },
+  parse: (input: { text: string }) => {
+    const text = normalizePreserveLines(input.text);
+
+    const productName =
+      getLineValue(text, ['Product', 'Product:']) ||
+      firstMatch(text, [/product[:\s]*([^\n]{2,200})/i]);
+
+    const declaredUnit =
+      getLineValue(text, ['Unit', 'Eenheid', 'Functional unit']) ||
+      firstMatch(text, [/unit[:\s]*([^\n]+)/i, /functional\s*unit[:\s]*([^\n]+)/i]);
+
+    const { manufacturer, address } = extractManufacturerWithAddress(text);
+
+    const issueRaw =
+      getLineValue(text, ['Issue date', 'Datum van publicatie', 'Publication date']) ||
+      firstMatch(text, [/issue\s*date[:\s]*([^\n]+)/i, /publication\s*date[:\s]*([^\n]+)/i]);
+
+    const validRaw =
+      getLineValue(text, ['End of validity', 'Expiration date', 'Einde geldigheid']) ||
+      firstMatch(text, [/end\s*of\s*validity[:\s]*([^\n]+)/i, /expiration\s*date[:\s]*([^\n]+)/i]);
+
+    const lcaRaw =
+      getLineValue(text, ['LCA standard', 'LCA-methode', 'Bepalingsmethode']) ||
+      firstMatch(text, [/lca\s*standard[:\s]*([^\n]+)/i, /bepalingsmethode[:\s]*([^\n]+)/i]);
+
+    const pcrRaw =
+      getLineValue(text, ['PCR']) ||
+      firstMatch(text, [/pcr[:\s]*([^\n]+)/i]);
+
+    const standardSet = detectStandardSet(text);
+    const setType = standardSet === 'SBK_SET_2' ? 'SBK_SET_2' : 'SBK_SET_1';
+
+    const { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
+
+    const { verified, verifier } = parseVerified(text);
+
+    return {
+      normalized: {
+        productName,
+        declaredUnit,
+        manufacturer: manufacturer || address,
+        issueDate: dateFromText(issueRaw || '') || dateFromText(text),
+        validUntil: dateFromText(validRaw || ''),
+        pcr: normalizePcrInfo(pcrRaw),
+        lcaStandard: normalizeLcaStandard(lcaRaw),
+        verified,
+        verifier,
+        database: undefined,
+        modulesDeclared: buildModules(modules, mndModules),
+        results,
+        impacts: [],
+        standardSet,
+        rawExtract: {
+          address,
+        },
+      },
+    };
+  },
+};

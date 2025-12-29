@@ -1,0 +1,15 @@
+Product: EPD asfalt
+Functionele eenheid: 1 ton
+Producent: Asfalt BV
+Datum van publicatie: 2022-01-01
+Einde geldigheid: 2027-01-01
+Verificateur: J. Doe
+LCA standaard: NMD Bepalingsmethode 1.1 (2022)
+PCR: PCR Asfalt versie 1.0
+Standaard database: Nationale Milieudatabase v3.5 en EcoInvent v3.6
+
+Resultaten
+Milieu-impact SBK set 1
+MKI Euro 1 2 3 6 7
+GWP kg CO2 10 20 30 60 70
+Ecochain Technologies
