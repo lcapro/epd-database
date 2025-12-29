@@ -31,6 +31,7 @@ export default function UploadPage() {
   const [parsed, setParsed] = useState<ParsedEpd | null>(null);
   const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
+  const [rawText, setRawText] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +171,7 @@ export default function UploadPage() {
       const json = await res.json();
       setFileId(json.fileId);
       setParsed(json.parsedEpd ?? null);
+      setRawText(typeof json.rawText === 'string' ? json.rawText : '');
 
       if (json.parseError) {
         setParseWarning(`Kon PDF-tekst niet uitlezen: ${json.parseError}. Vul de velden handmatig in.`);
