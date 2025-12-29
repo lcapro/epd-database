@@ -113,7 +113,7 @@ function insertConcatenatedSeparators(text: string): string {
 }
 
 function insertDecimalSeparators(text: string): string {
-  return text.replace(/(\d[.,]\d{2})(?=\d)/g, '$1 ');
+  return text.replace(/([+-]?\d+(?:[.,]\d{2}))(?=\d)/g, '$1 ');
 }
 
 function extractRowTokens(line: string, indicator?: string): { unit: string; tokens: string[] } | null {
@@ -136,10 +136,11 @@ function extractRowTokens(line: string, indicator?: string): { unit: string; tok
   if (firstIndex === undefined) return null;
   const unit = compact.slice(0, firstIndex).trim();
   let numericChunk = insertConcatenatedSeparators(compact.slice(firstIndex));
+  let rawTokens = numericChunk.match(TOKEN_RE) || [];
   if (indicator && ['ECI', 'MKI'].includes(indicator.toUpperCase()) && !/E[+-]?\d/i.test(numericChunk)) {
     numericChunk = insertDecimalSeparators(numericChunk);
+    rawTokens = numericChunk.match(TOKEN_RE) || [];
   }
-  const rawTokens = numericChunk.match(TOKEN_RE) || [];
   return { unit, tokens: rawTokens };
 }
 
