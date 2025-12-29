@@ -4,7 +4,7 @@ import { normalizePreserveLines } from './textUtils';
 const knownIndicators = new Set([
   'MKI', 'ADPE', 'ADPF', 'GWP', 'ODP', 'POCP', 'AP', 'EP', 'HTP', 'FAETP', 'MAETP', 'TETP',
   'PERE', 'PERM', 'PERT', 'PENRE', 'PENRM', 'PENRT', 'PET', 'SM', 'RSF', 'NRSF', 'FW',
-  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE',
+  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE', 'ECI',
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
@@ -50,6 +50,10 @@ function detectIndicator(line: string): string | undefined {
   const upper = trimmed.toUpperCase();
   for (const indicator of orderedIndicators) {
     if (upper.startsWith(indicator)) return indicator;
+  }
+  const fallback = trimmed.match(/^([A-Z]{2,}(?:-[A-Za-z]+)?)\b/);
+  if (fallback?.[1] && !fallback[1].toLowerCase().startsWith('environmental')) {
+    return fallback[1];
   }
   return undefined;
 }
@@ -122,12 +126,17 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
   if (!section) return { modules: [], results: [], mndModules: new Set() };
 
   const lines = section.split('\n').map((l) => l.trim()).filter(Boolean);
-  const modules = extractModuleHeader(lines);
+  let modules = extractModuleHeader(lines);
   const mndModules = new Set<string>();
 
   const results: EpdResult[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
+    const lowerLine = line.toLowerCase();
+    const headerTokens = Array.from(line.matchAll(moduleRegex)).map((m) => m[1]);
+    if (lowerLine.includes('environmental impact') || (lowerLine.includes('unit') && headerTokens.length >= 3)) {
+      continue;
+    }
     const indicator = detectIndicator(line);
     if (!indicator) continue;
 
@@ -145,6 +154,10 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
     if (!parsed) {
       i = j - 1;
       continue;
+    }
+
+    if (modules.length === 0 && parsed.tokens.length >= 9) {
+      modules = ['A1', 'A2', 'A3', 'A1-A3', 'C2', 'C3', 'C4', 'D', 'Total'];
     }
 
     const values: Record<string, number | null> = {};

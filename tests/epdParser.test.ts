@@ -49,7 +49,7 @@ describe('EPD parser registry', () => {
     assert.equal(parsed.lcaStandard.name, 'NMD Bepalingsmethode');
     assert.equal(parsed.lcaStandard.version, '1.1');
     assert.equal(parsed.verified, true);
-    assert.equal(parsed.verifier, 'Jane Smith');
+    assert.equal(parsed.verifier, 'Martijn van Hövell - SGS Search');
     assert.equal(parsed.standardSet, 'SBK_SET_1');
     assert.equal(parsed.pcr, undefined);
 
@@ -59,6 +59,14 @@ describe('EPD parser registry', () => {
     assert.equal(mki?.values.C4, 9);
     assert.equal(mki?.values.D, 10);
     assert.equal(mki?.values.Total, 11);
+  });
+
+  it('maps PVC impacts and database versions for UI', () => {
+    const parsed = parseEpd(pvcText);
+
+    assert.equal(parsed.databaseEcoinventVersion, 'EcoInvent v3.6');
+    assert.equal(parsed.verifierName, 'Martijn van Hövell - SGS Search');
+    assert.ok(parsed.impacts.length > 0);
   });
 
   it('selects the correct parser per PDF type', () => {

@@ -3,6 +3,7 @@ import { normalizeLcaStandard, normalizePcrInfo } from '../normalize';
 import { detectStandardSet } from '../standards';
 import { dateFromText, firstMatch, getLineValue, normalizePreserveLines } from '../textUtils';
 import { parseImpactTableDynamic } from '../impactTable';
+import { extractDatabaseVersions } from '../utils';
 
 function extractManufacturerWithAddress(text: string): { manufacturer?: string; address?: string } {
   const manufacturer =
@@ -11,7 +12,8 @@ function extractManufacturerWithAddress(text: string): { manufacturer?: string; 
 
   const address = getLineValue(text, ['Address', 'Adres']) || firstMatch(text, [/address[:\s]*([^\n]+)/i]);
 
-  return { manufacturer, address };
+  const cleanManufacturer = manufacturer ? manufacturer.split(' - ')[0].trim() : undefined;
+  return { manufacturer: cleanManufacturer || manufacturer, address };
 }
 
 function parseVerified(text: string): { verified?: boolean; verifier?: string } {
@@ -21,7 +23,7 @@ function parseVerified(text: string): { verified?: boolean; verifier?: string } 
 
   const verifier =
     getLineValue(text, ['Verifier', 'Verificateur', 'Toetser']) ||
-    firstMatch(text, [/verifier[:\s]*([^\n]+)/i, /verificateur[:\s]*([^\n]+)/i]);
+    firstMatch(text, [/verifier[:\s]*([^\n]+)/i, /verificateur[:\s]*([^\n]+)/i, /verifier[:\s]*\n\s*([^\n]+)/i]);
 
   if (!verifiedRaw) return { verifier };
   const normalized = verifiedRaw.toLowerCase();
@@ -36,6 +38,16 @@ function buildModules(modules: string[], mndModules: Set<string>): ModuleDeclara
     declared: !mndModules.has(module),
     mnd: mndModules.has(module) || undefined,
   }));
+}
+
+function extractStandardDatabase(text: string): { database?: string; ecoinvent?: string } {
+  const raw =
+    getLineValue(text, ['Standard database', 'Standaard database', 'Database']) ||
+    firstMatch(text, [/standard\s*database[:\s]*([^\n]+)/i, /database[:\s]*([^\n]+)/i]);
+
+  const { ecoinvent } = extractDatabaseVersions(raw || text);
+  if (ecoinvent) return { database: `EcoInvent v${ecoinvent}`, ecoinvent: `EcoInvent v${ecoinvent}` };
+  return { database: raw };
 }
 
 export const pvcEcochainParser = {
@@ -86,6 +98,7 @@ export const pvcEcochainParser = {
     const { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
 
     const { verified, verifier } = parseVerified(text);
+    const { database, ecoinvent } = extractStandardDatabase(text);
 
     return {
       normalized: {
@@ -98,13 +111,14 @@ export const pvcEcochainParser = {
         lcaStandard: normalizeLcaStandard(lcaRaw),
         verified,
         verifier,
-        database: undefined,
+        database,
         modulesDeclared: buildModules(modules, mndModules),
         results,
         impacts: [],
         standardSet,
         rawExtract: {
           address,
+          databaseEcoinventVersion: ecoinvent,
         },
       },
     };

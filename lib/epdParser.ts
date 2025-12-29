@@ -1,5 +1,6 @@
 import type { ParsedEpd, ParsedImpact, EpdImpactStage, EpdNormalized } from './types';
 import { parseEpdNormalized as parseEpdNormalizedInternal } from './epd/registry';
+import { extractDatabaseVersions } from './epd/utils';
 
 function mapNormalizedToParsed(normalized: EpdNormalized): ParsedEpd {
   const impacts: ParsedImpact[] = [];
@@ -29,6 +30,11 @@ function mapNormalizedToParsed(normalized: EpdNormalized): ParsedEpd {
       : normalized.pcr.name
     : undefined;
 
+  const databaseText = normalized.database || '';
+  const databaseVersions = extractDatabaseVersions(databaseText);
+  const rawEcoinvent = normalized.rawExtract?.databaseEcoinventVersion as string | undefined;
+  const ecoinventVersion = rawEcoinvent || (databaseVersions.ecoinvent ? `EcoInvent v${databaseVersions.ecoinvent}` : undefined);
+
   return {
     productName: normalized.productName,
     functionalUnit: normalized.declaredUnit,
@@ -36,8 +42,8 @@ function mapNormalizedToParsed(normalized: EpdNormalized): ParsedEpd {
     lcaMethod,
     pcrVersion,
     databaseName: normalized.database,
-    databaseNmdVersion: undefined,
-    databaseEcoinventVersion: undefined,
+    databaseNmdVersion: databaseVersions.nmd ? `NMD v${databaseVersions.nmd}` : undefined,
+    databaseEcoinventVersion: ecoinventVersion,
     publicationDate: normalized.issueDate,
     expirationDate: normalized.validUntil,
     verifierName: normalized.verifier,
