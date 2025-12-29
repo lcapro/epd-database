@@ -27,6 +27,8 @@ function parseVerified(text: string): { verified?: boolean; verifier?: string } 
       /verifier[:\s]*([^\n]+)/i,
       /verificateur[:\s]*([^\n]+)/i,
       /verifier[:\s]*\n\s*([^\n]+)/i,
+      /veri\s*er[:\s]*([^\n]+)/i,
+      /veri\s*er[:\s]*\n\s*([^\n]+)/i,
       /v\s*e\s*r\s*i\s*f\s*i\s*e\s*r[:\s]*([^\n]+)/i,
       /v\s*e\s*r\s*i\s*f\s*i\s*e\s*r[:\s]*\n\s*([^\n]+)/i,
     ]);
@@ -130,11 +132,21 @@ export const pvcEcochainParser = {
 
     const hasEci = results.some((row) => row.indicator === 'ECI');
     const mkiRow = results.find((row) => row.indicator === 'MKI');
+    const eciRow = results.find((row) => row.indicator === 'ECI');
     if (!hasEci && mkiRow) {
       results = [
         {
           ...mkiRow,
           indicator: 'ECI',
+        },
+        ...results,
+      ];
+    }
+    if (!mkiRow && eciRow) {
+      results = [
+        {
+          ...eciRow,
+          indicator: 'MKI',
         },
         ...results,
       ];

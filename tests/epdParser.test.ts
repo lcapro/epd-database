@@ -54,11 +54,15 @@ describe('EPD parser registry', () => {
     assert.equal(parsed.pcr, undefined);
 
     const mki = parsed.results.find((row) => row.indicator === 'MKI');
+    const eci = parsed.results.find((row) => row.indicator === 'ECI');
     assert.ok(mki);
-    assert.equal(mki?.values.A1, 1);
-    assert.equal(mki?.values.C4, 9);
-    assert.equal(mki?.values.D, 10);
-    assert.equal(mki?.values.Total, 11);
+    assert.ok(eci);
+    assert.equal(eci?.values.A1, 5.43);
+    assert.equal(eci?.values.D, -1.52);
+    assert.equal(eci?.values.Total, 8.48);
+    assert.equal(mki?.values.A1, 5.43);
+    assert.equal(mki?.values.D, -1.52);
+    assert.equal(mki?.values.Total, 8.48);
   });
 
   it('maps PVC impacts and database versions for UI', () => {
