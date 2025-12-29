@@ -150,6 +150,11 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
       j += 1;
     }
 
+    if (!/\d/.test(buffer)) {
+      i = j - 1;
+      continue;
+    }
+
     const parsed = extractRowTokens(buffer);
     if (!parsed) {
       i = j - 1;
@@ -160,8 +165,14 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
       modules = ['A1', 'A2', 'A3', 'A1-A3', 'C2', 'C3', 'C4', 'D', 'Total'];
     }
 
+    if (parsed.tokens.length < 4) {
+      i = j - 1;
+      continue;
+    }
+
     const values: Record<string, number | null> = {};
     const tokens = parsed.tokens;
+    const cleanUnit = parsed.unit.replace(new RegExp(`^${indicator}`, 'i'), '').trim();
     modules.forEach((module, idx) => {
       const token = tokens[idx];
       if (!token) {
@@ -178,7 +189,7 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
 
     results.push({
       indicator,
-      unit: parsed.unit,
+      unit: cleanUnit || parsed.unit,
       setType,
       values,
     });

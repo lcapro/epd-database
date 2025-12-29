@@ -1,6 +1,6 @@
 Ecochain v3.5.80
 Product: U3 Pipe PVC 315 mm grijs
-Unit: 1 m
+Unit: 1 piece
 Manufacturer: Wavin - NL - Hardenberg - Verified
 Address: Example Street 1
 LCA standard: NMD Bepalingsmethode 1.1 (2022)
@@ -8,7 +8,8 @@ Standard database: Worldwide - Ecoinvent v 3.6 Cut-Off
 Issue date: 2023-05-01
 End of validity: 2028-05-01
 Verified: Yes
-Verifier: Martijn van Hövell - SGS Search
+Verifier:
+Martijn van Hövell - SGS Search
 
 Results / Environmental impact SBK set 1
 A1 A2 A3 A1-A3 C2 C3 C4 D Total

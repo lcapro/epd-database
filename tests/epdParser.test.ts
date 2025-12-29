@@ -42,7 +42,7 @@ describe('EPD parser registry', () => {
     const parsed = parseEpdNormalized(pvcText);
 
     assert.equal(parsed.productName, 'U3 Pipe PVC 315 mm grijs');
-    assert.equal(parsed.declaredUnit, '1 m');
+    assert.equal(parsed.declaredUnit, '1 stuk');
     assert.equal(parsed.manufacturer, 'Wavin');
     assert.equal(parsed.issueDate, '2023-05-01');
     assert.equal(parsed.validUntil, '2028-05-01');

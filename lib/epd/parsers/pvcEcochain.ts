@@ -32,6 +32,31 @@ function parseVerified(text: string): { verified?: boolean; verifier?: string } 
   return { verifier };
 }
 
+function extractValueAfterLabel(text: string, label: string): string | undefined {
+  const lines = text.split('\n').map((line) => line.trim());
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.toLowerCase() === label.toLowerCase() || line.toLowerCase() === `${label.toLowerCase()}:`) {
+      const next = lines[i + 1];
+      if (next) return next;
+    }
+  }
+  return undefined;
+}
+
+function normalizeDeclaredUnit(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = raw.replace(/\s+/g, ' ').trim();
+  const match = cleaned.match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if (!match) return cleaned;
+  const value = match[1].replace(',', '.');
+  const unitRaw = match[2].toLowerCase();
+
+  if (/(ton|tonne|tonnes|t\b)/i.test(unitRaw)) return `${value} ton`;
+  if (/(stuk|stuks|piece|pieces|p\b|st\.\b)/i.test(unitRaw)) return `${value} stuk`;
+  return cleaned;
+}
+
 function buildModules(modules: string[], mndModules: Set<string>): ModuleDeclaration[] {
   return modules.map((module) => ({
     module,
@@ -98,19 +123,20 @@ export const pvcEcochainParser = {
     const { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
 
     const { verified, verifier } = parseVerified(text);
+    const verifierFallback = verifier || extractValueAfterLabel(text, 'Verifier');
     const { database, ecoinvent } = extractStandardDatabase(text);
 
     return {
       normalized: {
         productName,
-        declaredUnit,
+        declaredUnit: normalizeDeclaredUnit(declaredUnit),
         manufacturer: manufacturer || address,
         issueDate: dateFromText(issueRaw || '') || dateFromText(text),
         validUntil: dateFromText(validRaw || ''),
         pcr: normalizePcrInfo(pcrRaw),
         lcaStandard: normalizeLcaStandard(lcaRaw),
         verified,
-        verifier,
+        verifier: verifierFallback,
         database,
         modulesDeclared: buildModules(modules, mndModules),
         results,
