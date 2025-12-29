@@ -14,7 +14,7 @@ const sets: { value: EpdSetType; label: string }[] = [
   { value: 'SBK_BOTH', label: 'Beide sets (A1 + A2)' },
 ];
 
-type ImpactState = Record<string, number | ''>;
+type ImpactState = Record<string, number | '' | string>;
 type UnitState = Record<string, string>;
 
 export default function UploadPage() {
@@ -63,6 +63,15 @@ export default function UploadPage() {
       ...prev,
       [impactKey(indicator, setType, stage)]: value === '' ? '' : Number(value),
     }));
+  };
+
+  const formatNumberForInput = (value: number) => {
+    if (Number.isNaN(value) || !Number.isFinite(value)) return '';
+    if (value === 0) return '0';
+    const abs = Math.abs(value);
+    if (abs >= 1e-6 && abs < 1e6) return value.toString();
+    const fixed = value.toFixed(18);
+    return fixed.replace(/\.?0+$/, '');
   };
 
   const parseErrorResponse = async (res: Response) => {
@@ -114,7 +123,7 @@ export default function UploadPage() {
         nextUnits[indicator] = IMPACT_INDICATORS[indicator].defaultUnit;
       }
 
-      nextValues[impactKey(indicator, impact.setType, impact.stage)] = impact.value;
+      nextValues[impactKey(indicator, impact.setType, impact.stage)] = formatNumberForInput(impact.value);
     }
 
     setImpactUnits(nextUnits);

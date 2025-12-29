@@ -49,11 +49,12 @@ function detectIndicator(line: string): string | undefined {
   const trimmed = line.trim();
   const upper = trimmed.toUpperCase();
   for (const indicator of orderedIndicators) {
-    if (upper.startsWith(indicator)) return indicator;
-  }
-  const fallback = trimmed.match(/^([A-Z]{2,}(?:-[A-Za-z]+)?)\b/);
-  if (fallback?.[1] && !fallback[1].toLowerCase().startsWith('environmental')) {
-    return fallback[1];
+    if (upper.startsWith(indicator)) {
+      const nextChar = trimmed.slice(indicator.length, indicator.length + 1);
+      if (nextChar === '-') return undefined;
+      if (indicator === 'GWP' && /gwp-?luluc/i.test(trimmed)) return undefined;
+      return indicator;
+    }
   }
   return undefined;
 }
@@ -92,6 +93,10 @@ function extractModuleHeader(lines: string[]): string[] {
   return [];
 }
 
+function insertConcatenatedSeparators(text: string): string {
+  return text.replace(/E([+-]?\d+)(?=\d)/gi, 'E$1 ');
+}
+
 function extractRowTokens(line: string): { unit: string; tokens: string[] } | null {
   const compact = line.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
   const firstRe = new RegExp(TOKEN_RE.source, 'gi');
@@ -111,7 +116,8 @@ function extractRowTokens(line: string): { unit: string; tokens: string[] } | nu
   }
   if (firstIndex === undefined) return null;
   const unit = compact.slice(0, firstIndex).trim();
-  const rawTokens = compact.slice(firstIndex).match(TOKEN_RE) || [];
+  const numericChunk = insertConcatenatedSeparators(compact.slice(firstIndex));
+  const rawTokens = numericChunk.match(TOKEN_RE) || [];
   return { unit, tokens: rawTokens };
 }
 

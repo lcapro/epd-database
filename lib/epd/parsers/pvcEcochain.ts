@@ -23,7 +23,13 @@ function parseVerified(text: string): { verified?: boolean; verifier?: string } 
 
   const verifier =
     getLineValue(text, ['Verifier', 'Verificateur', 'Toetser']) ||
-    firstMatch(text, [/verifier[:\s]*([^\n]+)/i, /verificateur[:\s]*([^\n]+)/i, /verifier[:\s]*\n\s*([^\n]+)/i]);
+    firstMatch(text, [
+      /verifier[:\s]*([^\n]+)/i,
+      /verificateur[:\s]*([^\n]+)/i,
+      /verifier[:\s]*\n\s*([^\n]+)/i,
+      /v\s*e\s*r\s*i\s*f\s*i\s*e\s*r[:\s]*([^\n]+)/i,
+      /v\s*e\s*r\s*i\s*f\s*i\s*e\s*r[:\s]*\n\s*([^\n]+)/i,
+    ]);
 
   if (!verifiedRaw) return { verifier };
   const normalized = verifiedRaw.toLowerCase();
@@ -120,7 +126,19 @@ export const pvcEcochainParser = {
     const standardSet = detectStandardSet(text);
     const setType = standardSet === 'SBK_SET_2' ? 'SBK_SET_2' : 'SBK_SET_1';
 
-    const { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
+    let { results, modules, mndModules } = parseImpactTableDynamic(text, setType);
+
+    const hasEci = results.some((row) => row.indicator === 'ECI');
+    const mkiRow = results.find((row) => row.indicator === 'MKI');
+    if (!hasEci && mkiRow) {
+      results = [
+        {
+          ...mkiRow,
+          indicator: 'ECI',
+        },
+        ...results,
+      ];
+    }
 
     const { verified, verifier } = parseVerified(text);
     const verifierFallback = verifier || extractValueAfterLabel(text, 'Verifier');
