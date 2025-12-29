@@ -20,6 +20,14 @@ function mapNormalizedToParsed(normalized: EpdNormalized): ParsedEpd {
     }
   }
 
+  const hasMki = impacts.some((impact) => impact.indicator === 'MKI');
+  const eciImpacts = impacts.filter((impact) => impact.indicator === 'ECI');
+  if (!hasMki && eciImpacts.length > 0) {
+    eciImpacts.forEach((impact) => {
+      impacts.push({ ...impact, indicator: 'MKI' });
+    });
+  }
+
   const lcaMethod = normalized.lcaStandard.version
     ? `${normalized.lcaStandard.name} ${normalized.lcaStandard.version}`
     : normalized.lcaStandard.name;

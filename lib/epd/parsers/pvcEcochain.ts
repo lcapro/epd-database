@@ -153,7 +153,11 @@ export const pvcEcochainParser = {
     }
 
     const { verified, verifier } = parseVerified(text);
-    const verifierFallback = verifier || extractValueAfterLabel(text, 'Verifier');
+    const verifierFallback =
+      verifier ||
+      extractValueAfterLabel(text, 'Verifier') ||
+      extractValueAfterLabel(text, 'Veri er') ||
+      extractValueAfterLabel(text, 'Verificateur');
     const { database, ecoinvent } = extractStandardDatabase(text);
 
     return {
