@@ -113,17 +113,23 @@ export default function UploadPage() {
     const nextUnits: UnitState = { ...impactUnits };
 
     for (const impact of data.impacts || []) {
-      const indicator = String(impact.indicator || '').trim();
-      if (!indicator) continue;
+      const rawIndicator = String(impact.indicator || '').trim();
+      if (!rawIndicator) continue;
 
-      // zet units (parser-unit wint)
+      const indicator = rawIndicator === 'ECI' ? 'MKI' : rawIndicator;
+      const key = impactKey(indicator, impact.setType, impact.stage);
+
       if (impact.unit && indicator) {
-        nextUnits[indicator] = impact.unit;
+        if (!nextUnits[indicator]) {
+          nextUnits[indicator] = impact.unit;
+        }
       } else if (isKnownIndicator(indicator) && !nextUnits[indicator]) {
         nextUnits[indicator] = IMPACT_INDICATORS[indicator].defaultUnit;
       }
 
-      nextValues[impactKey(indicator, impact.setType, impact.stage)] = formatNumberForInput(impact.value);
+      if (nextValues[key] === undefined) {
+        nextValues[key] = formatNumberForInput(impact.value);
+      }
     }
 
     setImpactUnits(nextUnits);
