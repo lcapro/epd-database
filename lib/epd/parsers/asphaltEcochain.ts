@@ -87,7 +87,7 @@ function detectStandardSetLegacy(text: string): EpdSetType {
 const knownIndicators = new Set([
   'MKI', 'ADPE', 'ADPF', 'GWP', 'ODP', 'POCP', 'AP', 'EP', 'HTP', 'FAETP', 'MAETP', 'TETP',
   'PERE', 'PERM', 'PERT', 'PENRE', 'PENRM', 'PENRT', 'PET', 'SM', 'RSF', 'NRSF', 'FW',
-  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE',
+  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE', 'ECI',
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
@@ -416,6 +416,14 @@ export function parseAsphaltEpd(raw: string): ParsedEpd {
       if (a1a3 !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'A1-A3', value: a1a3, unit: r.unit });
       if (d !== undefined) impacts.push({ indicator: r.indicator, setType, stage: 'D', value: d, unit: r.unit });
     }
+  }
+
+  const hasMki = impacts.some((impact) => impact.indicator === 'MKI');
+  const eciImpacts = impacts.filter((impact) => impact.indicator === 'ECI');
+  if (!hasMki && eciImpacts.length > 0) {
+    eciImpacts.forEach((impact) => {
+      impacts.push({ ...impact, indicator: 'MKI' });
+    });
   }
 
   parsed.impacts = impacts;
