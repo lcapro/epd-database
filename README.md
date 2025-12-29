@@ -53,3 +53,25 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 
 ## Export
 - Gebruik de knop "Exporteer naar Excel" op de overzichtspagina, of roep `/api/epd/export?format=excel|csv` rechtstreeks aan.
+
+## How to add a new EPD format parser
+1. Voeg een nieuwe parser toe in `lib/epd/parsers/` (bijv. `myFormat.ts`).
+2. Exporteer een parser object met:
+   - `id`: unieke id string.
+   - `canParse({ text, meta })`: retourneer een score tussen `0` en `1` en een korte `reason`.
+   - `parse({ text, meta })`: retourneer een `EpdNormalized` object.
+3. Registreer de parser in `lib/epd/registry.ts` door hem toe te voegen aan de `parsers` array.
+4. Zorg dat je parser minimaal vult:
+   - `productName`, `declaredUnit`, `manufacturer`, `issueDate`, `validUntil`.
+   - `lcaStandard` via `normalizeLcaStandard()` (`lib/epd/normalize.ts`).
+   - `results` + `modulesDeclared` (gebruik eventueel `parseImpactTableDynamic`).
+5. Voeg tests toe in `tests/` met fixtures zodat parser-selectie en output stabiel blijven.
+
+Voorbeeld (schets):
+```ts
+export const myParser = {
+  id: 'myFormatV1',
+  canParse: ({ text }) => ({ score: text.includes('MyFormat') ? 0.9 : 0, reason: '...' }),
+  parse: ({ text }) => ({ normalized: { ... } }),
+};
+```
