@@ -171,9 +171,12 @@ function shouldAcceptToken(text: string, start: number, end: number): boolean {
   const prevNonSpace = text.slice(0, start).trimEnd().slice(-1);
   const nextNonSpace = text.slice(end).trimStart()[0];
   const nextNonSpace2 = text.slice(end).trimStart()[1];
+  const token = text.slice(start, end);
 
   if (isAlpha(prev)) return false;
   if (isAlpha(prevNonSpace) && /^\d$/.test(text.slice(start, end)) && nextNonSpace === '-') return false;
+  if (isAlpha(prevNonSpace) && /^\d$/.test(token)) return false;
+  if (/^\d$/.test(token) && (nextNonSpace === '-' || nextNonSpace === '−')) return false;
   if (isAlpha(next)) return false;
   if (next === '-' && isAlpha(next2)) return false;
   if (nextNonSpace === '-' && isAlpha(nextNonSpace2)) return false;
@@ -194,7 +197,8 @@ function shouldAcceptFirstToken(text: string, start: number, end: number, token:
   if (isAlpha(prev)) {
     return /e/i.test(token);
   }
-  if (isAlpha(prevNonSpace) && /^\d$/.test(token) && nextNonSpace === '-') return false;
+  if (isAlpha(prevNonSpace) && /^\d$/.test(token)) return false;
+  if (/^\d$/.test(token) && (nextNonSpace === '-' || nextNonSpace === '−')) return false;
   return true;
 }
 
@@ -217,9 +221,29 @@ function extractNumberTokens(text: string): string[] {
 }
 
 function insertConcatenatedSeparators(text: string): string {
-  return text.replace(/E([+-]?\d)(?=\d,)/gi, 'E$1 ');
+  const withZeros = text.replace(/E([+-]?\d)(0{1,})(?=\d[.,])/gi, (_match, exp, zeros) => {
+    const spacedZeros = Array(zeros.length).fill('0').join(' ');
+    return `E${exp} ${spacedZeros} `;
+  });
+  return withZeros.replace(/E([+-]?\d)(?=\d[.,])/gi, 'E$1 ');
 }
 
+function expandLeadingZeroTokens(tokens: string[]): string[] {
+  const expanded: string[] = [];
+  for (const token of tokens) {
+    const match = token.match(/^(0{2,})(\d[.,].*)$/);
+    if (match) {
+      const zeros = match[1].length;
+      for (let i = 0; i < zeros; i += 1) {
+        expanded.push('0');
+      }
+      expanded.push(match[2]);
+      continue;
+    }
+    expanded.push(token);
+  }
+  return expanded;
+}
 /**
  * Pak de “Resultaten -> Milieu-impact SBK set X ...” sectie als substring,
  * zodat we NIET per ongeluk de definities (EET=...) pakken.
@@ -327,6 +351,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     if (tokens.length < 3 && /^0+$/.test(numsRaw.replace(/\s+/g, ''))) {
       tokens = Array(5).fill('0');
     }
+    tokens = expandLeadingZeroTokens(tokens);
     const nums: number[] = [];
     for (const t of tokens) {
       const n = parseNumberToken(t);
