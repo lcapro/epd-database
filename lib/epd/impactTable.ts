@@ -112,7 +112,11 @@ function insertConcatenatedSeparators(text: string): string {
   return text.replace(/E([+-]?\d+)(?=\d)/gi, 'E$1 ');
 }
 
-function extractRowTokens(line: string): { unit: string; tokens: string[] } | null {
+function insertDecimalSeparators(text: string): string {
+  return text.replace(/([+-]?\d+(?:[.,]\d{2}))(?=\d)/g, '$1 ');
+}
+
+function extractRowTokens(line: string, indicator?: string): { unit: string; tokens: string[] } | null {
   const compact = line.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
   const firstRe = new RegExp(TOKEN_RE.source, 'gi');
   let firstIndex: number | undefined;
@@ -131,8 +135,12 @@ function extractRowTokens(line: string): { unit: string; tokens: string[] } | nu
   }
   if (firstIndex === undefined) return null;
   const unit = compact.slice(0, firstIndex).trim();
-  const numericChunk = insertConcatenatedSeparators(compact.slice(firstIndex));
-  const rawTokens = numericChunk.match(TOKEN_RE) || [];
+  let numericChunk = insertConcatenatedSeparators(compact.slice(firstIndex));
+  let rawTokens = numericChunk.match(TOKEN_RE) || [];
+  if (indicator && ['ECI', 'MKI'].includes(indicator.toUpperCase()) && !/E[+-]?\d/i.test(numericChunk)) {
+    numericChunk = insertDecimalSeparators(numericChunk);
+    rawTokens = numericChunk.match(TOKEN_RE) || [];
+  }
   return { unit, tokens: rawTokens };
 }
 
@@ -184,7 +192,7 @@ export function parseImpactTableDynamic(text: string, setType: EpdSetType): {
       continue;
     }
 
-    const parsed = extractRowTokens(buffer);
+    const parsed = extractRowTokens(buffer, indicator);
     if (!parsed) {
       i = j - 1;
       continue;
