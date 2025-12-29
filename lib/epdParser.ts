@@ -168,10 +168,15 @@ function shouldAcceptToken(text: string, start: number, end: number): boolean {
   const prev = text[start - 1];
   const next = text[end];
   const next2 = text[end + 1];
+  const prevNonSpace = text.slice(0, start).trimEnd().slice(-1);
+  const nextNonSpace = text.slice(end).trimStart()[0];
+  const nextNonSpace2 = text.slice(end).trimStart()[1];
 
   if (isAlpha(prev)) return false;
+  if (isAlpha(prevNonSpace) && /^\d$/.test(text.slice(start, end)) && nextNonSpace === '-') return false;
   if (isAlpha(next)) return false;
   if (next === '-' && isAlpha(next2)) return false;
+  if (nextNonSpace === '-' && isAlpha(nextNonSpace2)) return false;
   return true;
 }
 
@@ -179,12 +184,17 @@ function shouldAcceptFirstToken(text: string, start: number, end: number, token:
   const prev = text[start - 1];
   const next = text[end];
   const next2 = text[end + 1];
+  const prevNonSpace = text.slice(0, start).trimEnd().slice(-1);
+  const nextNonSpace = text.slice(end).trimStart()[0];
+  const nextNonSpace2 = text.slice(end).trimStart()[1];
 
   if (isAlpha(next)) return false;
   if (next === '-' && isAlpha(next2)) return false;
+  if (nextNonSpace === '-' && isAlpha(nextNonSpace2)) return false;
   if (isAlpha(prev)) {
     return /e/i.test(token);
   }
+  if (isAlpha(prevNonSpace) && /^\d$/.test(token) && nextNonSpace === '-') return false;
   return true;
 }
 
@@ -322,11 +332,19 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
       const n = parseNumberToken(t);
       if (n === undefined) continue;
       nums.push(n);
-      if (nums.length >= 5) break;
     }
-    if (nums.length < 3) continue;
 
-    out.push({ indicator, unit: unitRaw, nums });
+    let normalizedNums = nums.slice(0, 5);
+    if (normalizedNums.length === 2) {
+      normalizedNums = [normalizedNums[0], 0, 0, normalizedNums[1], 0];
+    } else if (normalizedNums.length === 3) {
+      normalizedNums = [normalizedNums[0], 0, 0, normalizedNums[1], normalizedNums[2]];
+    } else if (normalizedNums.length === 4) {
+      normalizedNums = [normalizedNums[0], normalizedNums[1], normalizedNums[2], normalizedNums[3], 0];
+    }
+    if (normalizedNums.length < 1) continue;
+
+    out.push({ indicator, unit: unitRaw, nums: normalizedNums });
   }
 
   return out;
