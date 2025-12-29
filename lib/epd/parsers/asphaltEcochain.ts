@@ -85,9 +85,56 @@ function detectStandardSetLegacy(text: string): EpdSetType {
 // ---------------- IMPACT PARSING (ROBUST) ----------------
 
 const knownIndicators = new Set([
-  'MKI', 'ADPE', 'ADPF', 'GWP', 'ODP', 'POCP', 'AP', 'EP', 'HTP', 'FAETP', 'MAETP', 'TETP',
-  'PERE', 'PERM', 'PERT', 'PENRE', 'PENRM', 'PENRT', 'PET', 'SM', 'RSF', 'NRSF', 'FW',
-  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE', 'ECI',
+  'MKI',
+  'ADPE',
+  'ADPF',
+  'GWP',
+  'ODP',
+  'POCP',
+  'AP',
+  'EP',
+  'HTP',
+  'FAETP',
+  'MAETP',
+  'TETP',
+  'PERE',
+  'PERM',
+  'PERT',
+  'PENRE',
+  'PENRM',
+  'PENRT',
+  'PET',
+  'SM',
+  'RSF',
+  'NRSF',
+  'FW',
+  'HWD',
+  'NHWD',
+  'RWD',
+  'CRU',
+  'MFR',
+  'MER',
+  'EE',
+  'EET',
+  'EEE',
+  'ECI',
+  // SBK set 2 (+A2) indicatoren
+  'GWP-TOTAL',
+  'GWP-F',
+  'GWP-B',
+  'GWP-LULUC',
+  'EP-FW',
+  'EP-M',
+  'EP-T',
+  'ADP-MM',
+  'ADP-F',
+  'WDP',
+  'PM',
+  'IR',
+  'ETP-FW',
+  'HTP-C',
+  'HTP-NC',
+  'SQP',
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
@@ -215,21 +262,40 @@ function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined
  * - soms staat indicator op eigen regel (GWP) en unit op volgende regels
  * - soms zit alles op 1 regel zonder spaties tussen unit en getallen (MKIEuro3,655E+0...)
  */
+function findIndicatorInLine(line: string): { indicator: string; index: number } | undefined {
+  let best: { indicator: string; index: number } | undefined;
+
+  for (const indicator of orderedIndicators) {
+    const upper = line.toUpperCase();
+    if (upper.startsWith(indicator)) {
+      const nextChar = line.slice(indicator.length, indicator.length + 1);
+      if (nextChar === '-' && !indicator.includes('-')) continue;
+      if (indicator === 'GWP' && /gwp-?luluc/i.test(line)) continue;
+      return { indicator, index: 0 };
+    }
+
+    const regex = new RegExp(`\\b${indicator}\\b`, 'i');
+    const match = regex.exec(line);
+    if (!match) continue;
+    const index = match.index ?? 0;
+    const slice = line.slice(index);
+    const nextChar = slice.slice(indicator.length, indicator.length + 1);
+    if (nextChar === '-' && !indicator.includes('-')) continue;
+    if (indicator === 'GWP' && /gwp-?luluc/i.test(slice)) continue;
+    if (!best || index < best.index) {
+      best = { indicator, index };
+    }
+  }
+
+  return best;
+}
+
 function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator: string; unit: string; nums: number[] }[] {
   const setNo: '1' | '2' = setType === 'SBK_SET_2' ? '2' : '1';
   const section = sliceResultsSection(text, setNo);
   if (!section) return [];
 
   const lines = section.split('\n').map((l) => (l || '').trim()).filter(Boolean);
-
-  const detectIndicator = (line: string): string | undefined => {
-    const trimmed = line.trim();
-    const upper = trimmed.toUpperCase();
-    for (const indicator of orderedIndicators) {
-      if (upper.startsWith(indicator)) return indicator;
-    }
-    return undefined;
-  };
 
   const records: string[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -239,16 +305,16 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     const low = line.toLowerCase();
     if (low.startsWith('verklaring van vertrouwelijkheid')) break;
 
-    const indicator = detectIndicator(line);
-    if (indicator) {
+    const found = findIndicatorInLine(line);
+    if (found) {
       // start record
-      let buf = line;
+      let buf = line.slice(found.index);
 
       // voeg vervolgregels toe zolang ze niet met een nieuwe indicator starten
       let j = i + 1;
       while (j < lines.length) {
         const next = lines[j];
-        if (detectIndicator(next)) break;
+        if (findIndicatorInLine(next)) break;
 
         // stop hard bij duidelijke footer
         if (next.toLowerCase().includes('ecochain technologies')) break;
@@ -265,10 +331,10 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
   const out: { indicator: string; unit: string; nums: number[] }[] = [];
 
   for (const rec of records) {
-    const indicator = detectIndicator(rec);
-    if (!indicator) continue;
+    const found = findIndicatorInLine(rec);
+    if (!found) continue;
 
-    const rest = rec.slice(indicator.length).trim();
+    const rest = rec.slice(found.index + found.indicator.length).trim();
 
     // maak unit+numbers één string, maar behoud spaties
     const compact = rest.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
@@ -316,7 +382,7 @@ function parseImpactTableForSet(text: string, setType: EpdSetType): { indicator:
     }
     if (normalizedNums.length < 1) continue;
 
-    out.push({ indicator, unit: unitRaw, nums: normalizedNums });
+    out.push({ indicator: found.indicator, unit: unitRaw, nums: normalizedNums });
   }
 
   return out;

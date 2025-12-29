@@ -2,9 +2,56 @@ import type { EpdImpactStage, EpdResult, EpdSetType } from '../types';
 import { normalizePreserveLines } from './textUtils';
 
 const knownIndicators = new Set([
-  'MKI', 'ADPE', 'ADPF', 'GWP', 'ODP', 'POCP', 'AP', 'EP', 'HTP', 'FAETP', 'MAETP', 'TETP',
-  'PERE', 'PERM', 'PERT', 'PENRE', 'PENRM', 'PENRT', 'PET', 'SM', 'RSF', 'NRSF', 'FW',
-  'HWD', 'NHWD', 'RWD', 'CRU', 'MFR', 'MER', 'EE', 'EET', 'EEE', 'ECI',
+  'MKI',
+  'ADPE',
+  'ADPF',
+  'GWP',
+  'ODP',
+  'POCP',
+  'AP',
+  'EP',
+  'HTP',
+  'FAETP',
+  'MAETP',
+  'TETP',
+  'PERE',
+  'PERM',
+  'PERT',
+  'PENRE',
+  'PENRM',
+  'PENRT',
+  'PET',
+  'SM',
+  'RSF',
+  'NRSF',
+  'FW',
+  'HWD',
+  'NHWD',
+  'RWD',
+  'CRU',
+  'MFR',
+  'MER',
+  'EE',
+  'EET',
+  'EEE',
+  'ECI',
+  // SBK set 2 (+A2) indicatoren
+  'GWP-TOTAL',
+  'GWP-F',
+  'GWP-B',
+  'GWP-LULUC',
+  'EP-FW',
+  'EP-M',
+  'EP-T',
+  'ADP-MM',
+  'ADP-F',
+  'WDP',
+  'PM',
+  'IR',
+  'ETP-FW',
+  'HTP-C',
+  'HTP-NC',
+  'SQP',
 ]);
 const orderedIndicators = Array.from(knownIndicators).sort((a, b) => b.length - a.length);
 
@@ -51,7 +98,7 @@ function detectIndicator(line: string): string | undefined {
   for (const indicator of orderedIndicators) {
     if (upper.startsWith(indicator)) {
       const nextChar = trimmed.slice(indicator.length, indicator.length + 1);
-      if (nextChar === '-') return undefined;
+      if (nextChar === '-' && !indicator.includes('-')) return undefined;
       if (indicator === 'GWP' && /gwp-?luluc/i.test(trimmed)) return undefined;
       return indicator;
     }
@@ -60,6 +107,7 @@ function detectIndicator(line: string): string | undefined {
 }
 
 function findIndicatorInLine(line: string): { indicator: string; index: number } | undefined {
+  let best: { indicator: string; index: number } | undefined;
   for (const indicator of orderedIndicators) {
     const regex = new RegExp(`\\b${indicator}\\b`, 'i');
     const match = regex.exec(line);
@@ -67,11 +115,13 @@ function findIndicatorInLine(line: string): { indicator: string; index: number }
     const index = match.index ?? 0;
     const slice = line.slice(index);
     const nextChar = slice.slice(indicator.length, indicator.length + 1);
-    if (nextChar === '-') continue;
+    if (nextChar === '-' && !indicator.includes('-')) continue;
     if (indicator === 'GWP' && /gwp-?luluc/i.test(slice)) continue;
-    return { indicator, index };
+    if (!best || index < best.index) {
+      best = { indicator, index };
+    }
   }
-  return undefined;
+  return best;
 }
 
 function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined {
