@@ -66,8 +66,16 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
     );
   };
 
-  const findImpact = (indicator: string, setType: string, stage: string) =>
-    impacts.find((i) => i.indicator === indicator && i.set_type === setType && i.stage === stage)?.value ?? '-';
+  const findImpact = (indicator: string, setType: string, stage: string) => {
+    const exact = impacts.find((i) => i.indicator === indicator && i.set_type === setType && i.stage === stage)?.value;
+    if (exact !== undefined && exact !== null) return exact;
+    if (indicator === 'MKI') {
+      return (
+        impacts.find((i) => i.indicator === 'ECI' && i.set_type === setType && i.stage === stage)?.value ?? '-'
+      );
+    }
+    return '-';
+  };
 
   return (
     <div className="space-y-4">
