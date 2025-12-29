@@ -1,8 +1,8 @@
-import type { EpdNormalized, ModuleDeclaration, ParsedEpd, ParsedImpact } from '../types';
+import type { EpdNormalized, ModuleDeclaration, ParsedEpd, ParsedImpact } from '../../types';
 import { normalizeLcaStandard, normalizePcrInfo } from '../normalize';
 import { detectStandardSet } from '../standards';
 import { dateFromText, firstMatch, getLineValue, normalizePreserveLines } from '../textUtils';
-import type { EpdImpactStage, EpdSetType } from '../types';
+import type { EpdImpactStage, EpdSetType } from '../../types';
 
 const impactStages: EpdImpactStage[] = ['A1', 'A2', 'A3', 'A1-A3', 'D'];
 

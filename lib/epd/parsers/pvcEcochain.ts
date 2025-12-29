@@ -1,4 +1,4 @@
-import type { EpdNormalized, ModuleDeclaration } from '../types';
+import type { EpdNormalized, ModuleDeclaration } from '../../types';
 import { normalizeLcaStandard, normalizePcrInfo } from '../normalize';
 import { detectStandardSet } from '../standards';
 import { dateFromText, firstMatch, getLineValue, normalizePreserveLines } from '../textUtils';
