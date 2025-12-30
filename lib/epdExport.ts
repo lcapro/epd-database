@@ -116,7 +116,7 @@ export function exportToCsv(rows: Record<string, RowValue>[]): string {
 
 export async function exportToWorkbook(
   rows: Record<string, RowValue>[]
-): Promise<Buffer> {
+): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('EPDs');
 
@@ -126,5 +126,8 @@ export async function exportToWorkbook(
   }
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
-  return Buffer.isBuffer(arrayBuffer) ? arrayBuffer : Buffer.from(arrayBuffer);
+  if (Buffer.isBuffer(arrayBuffer)) {
+    return arrayBuffer.buffer.slice(arrayBuffer.byteOffset, arrayBuffer.byteOffset + arrayBuffer.byteLength);
+  }
+  return arrayBuffer;
 }
