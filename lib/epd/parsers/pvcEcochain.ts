@@ -1,8 +1,9 @@
-import type { EpdNormalized, ModuleDeclaration } from '../../types';
+import type { EpdNormalized, EpdSetType, ModuleDeclaration } from '../../types';
 import { normalizeLcaStandard, normalizePcrInfo } from '../normalize';
 import { detectStandardSet } from '../standards';
 import { dateFromText, firstMatch, getLineValue, normalizePreserveLines } from '../textUtils';
 import { parseImpactTableDynamic } from '../impactTable';
+import { INDICATOR_CODES_SET_2 } from '../../impactIndicators';
 import { extractDatabaseVersions } from '../utils';
 
 function extractManufacturerWithAddress(text: string): { manufacturer?: string; address?: string } {
@@ -129,35 +130,67 @@ export const pvcEcochainParser = {
     const hasSet2Indicators = /gwp-total|gwp-f|gwp-b|gwp-luluc|ep-fw|ep-m|ep-t|adp-mm|adp-f|wdp|pm|ir|etp-fw|htp-c|htp-nc|sqp/i.test(
       text
     );
-    const derivedSet = standardSet === 'UNKNOWN' && hasSet2Indicators ? 'SBK_SET_2' : standardSet;
-    const setType = derivedSet === 'SBK_SET_2' ? 'SBK_SET_2' : 'SBK_SET_1';
 
-    let { results, modules, mndModules } = parseImpactTableDynamic(text, setType, {
-      allowFallbackSection: standardSet === 'UNKNOWN' || derivedSet === 'SBK_SET_2',
+    const set1Parsed = parseImpactTableDynamic(text, 'SBK_SET_1', {
+      allowFallbackSection: standardSet === 'UNKNOWN',
     });
+    const shouldParseSet2 =
+      hasSet2Indicators || standardSet === 'SBK_SET_2' || standardSet === 'SBK_BOTH' || standardSet === 'UNKNOWN';
+    const set2Parsed = shouldParseSet2
+      ? parseImpactTableDynamic(text, 'SBK_SET_2', {
+          allowFallbackSection: true,
+        })
+      : { results: [], modules: [], mndModules: new Set<string>() };
 
-    const mkiRow = results.find((row) => row.indicator === 'MKI');
-    const eciRow = results.find((row) => row.indicator === 'ECI');
+    const set2IndicatorSet = new Set(INDICATOR_CODES_SET_2);
+    const set2Results = set2Parsed.results.filter((row) => set2IndicatorSet.has(row.indicator as string));
+    let results = [...set1Parsed.results, ...set2Results];
+
     const rowHasValues = (row: typeof results[number] | undefined) =>
       !!row && Object.values(row.values).some((value) => value !== null && value !== undefined);
-    if (eciRow && rowHasValues(eciRow)) {
-      results = results.filter((row) => row.indicator !== 'MKI');
-      results = [
-        {
-          ...eciRow,
-          indicator: 'MKI',
-        },
-        ...results,
-      ];
-    } else if (mkiRow) {
-      results = [
-        {
-          ...mkiRow,
-          indicator: 'ECI',
-        },
-        ...results,
-      ];
-    }
+
+    const normalizeMkiEci = (rows: typeof results) => {
+      const mkiRow = rows.find((row) => row.indicator === 'MKI');
+      const eciRow = rows.find((row) => row.indicator === 'ECI');
+      if (eciRow && rowHasValues(eciRow)) {
+        const withoutMki = rows.filter((row) => row.indicator !== 'MKI');
+        return [
+          {
+            ...eciRow,
+            indicator: 'MKI',
+          },
+          ...withoutMki,
+        ];
+      }
+      if (mkiRow) {
+        return [
+          {
+            ...mkiRow,
+            indicator: 'ECI',
+          },
+          ...rows,
+        ];
+      }
+      return rows;
+    };
+
+    const resultsBySet = new Map<EpdSetType, typeof results>();
+    results.forEach((row) => {
+      const existing = resultsBySet.get(row.setType) || [];
+      existing.push(row);
+      resultsBySet.set(row.setType, existing);
+    });
+    results = Array.from(resultsBySet.values()).flatMap((rows) => normalizeMkiEci(rows));
+
+    const modules = [...set1Parsed.modules];
+    set2Parsed.modules.forEach((module) => {
+      if (!modules.includes(module)) modules.push(module);
+    });
+    const mndModules = new Set<string>([...set1Parsed.mndModules, ...set2Parsed.mndModules]);
+
+    const hasSet1 = set1Parsed.results.length > 0;
+    const hasSet2 = set2Results.length > 0;
+    const derivedSet = hasSet1 && hasSet2 ? 'SBK_BOTH' : hasSet2 ? 'SBK_SET_2' : hasSet1 ? 'SBK_SET_1' : standardSet;
 
     const { verified, verifier } = parseVerified(text);
     const verifierFallback =
