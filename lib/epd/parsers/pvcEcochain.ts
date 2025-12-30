@@ -186,7 +186,10 @@ export const pvcEcochainParser = {
     set2Parsed.modules.forEach((module) => {
       if (!modules.includes(module)) modules.push(module);
     });
-    const mndModules = new Set<string>([...set1Parsed.mndModules, ...set2Parsed.mndModules]);
+    const mndModules = new Set<string>([
+      ...Array.from(set1Parsed.mndModules),
+      ...Array.from(set2Parsed.mndModules),
+    ]);
 
     const hasSet1 = set1Parsed.results.length > 0;
     const hasSet2 = set2Results.length > 0;
