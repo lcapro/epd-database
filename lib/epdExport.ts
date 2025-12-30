@@ -1,17 +1,45 @@
 import ExcelJS from 'exceljs';
+import { ALL_INDICATOR_CODES } from './impactIndicators';
 import { EpdImpactRecord, EpdRecord } from './types';
 
 export interface ExportEpdShape extends EpdRecord {
   impacts: EpdImpactRecord[];
 }
 
-const stages = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
-const indicators = ['MKI', 'CO2'] as const;
-const sets = ['SBK_SET_1', 'SBK_SET_2'] as const;
+const defaultStages = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
+const defaultIndicators = ['MKI', 'CO2', ...ALL_INDICATOR_CODES.filter((code) => !['MKI', 'CO2'].includes(code))] as const;
+const defaultSets = ['SBK_SET_1', 'SBK_SET_2'] as const;
 
 type RowValue = string | number | null;
 
-function buildColumns() {
+function mergeOrdered(defaults: readonly string[], extras: string[]) {
+  const uniqueExtras = Array.from(new Set(extras))
+    .filter((value) => value && !defaults.includes(value))
+    .sort((a, b) => a.localeCompare(b));
+  return [...defaults, ...uniqueExtras];
+}
+
+function collectImpactDimensions(epds: ExportEpdShape[]) {
+  const indicators: string[] = [];
+  const sets: string[] = [];
+  const stages: string[] = [];
+
+  epds.forEach((epd) => {
+    epd.impacts.forEach((impact) => {
+      if (impact.indicator) indicators.push(String(impact.indicator));
+      if (impact.set_type) sets.push(String(impact.set_type));
+      if (impact.stage) stages.push(String(impact.stage));
+    });
+  });
+
+  return {
+    indicators: mergeOrdered(defaultIndicators, indicators),
+    sets: mergeOrdered(defaultSets, sets),
+    stages: mergeOrdered(defaultStages, stages),
+  };
+}
+
+function buildColumns(epds: ExportEpdShape[]) {
   const base = [
     'id',
     'product_name',
@@ -26,6 +54,7 @@ function buildColumns() {
     'standard_set',
   ];
 
+  const { indicators, sets, stages } = collectImpactDimensions(epds);
   const impactColumns: string[] = [];
   indicators.forEach((indicator) => {
     sets.forEach((setType) => {
@@ -39,7 +68,7 @@ function buildColumns() {
 }
 
 export function buildExportRows(epds: ExportEpdShape[]) {
-  const columns = buildColumns();
+  const columns = buildColumns(epds);
   return epds.map((epd) => {
     const row: Record<string, RowValue> = {};
     columns.forEach((col) => { row[col] = null; });
@@ -87,7 +116,7 @@ export function exportToCsv(rows: Record<string, RowValue>[]): string {
 
 export async function exportToWorkbook(
   rows: Record<string, RowValue>[]
-): Promise<ArrayBuffer> {
+): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('EPDs');
 
@@ -96,7 +125,6 @@ export async function exportToWorkbook(
     rows.forEach((row) => sheet.addRow(row));
   }
 
-  // exceljs geeft al een ArrayBuffer terug, dat is precies wat NextResponse verwacht
   const arrayBuffer = await workbook.xlsx.writeBuffer();
-  return arrayBuffer;
+  return Buffer.isBuffer(arrayBuffer) ? arrayBuffer : Buffer.from(arrayBuffer);
 }
