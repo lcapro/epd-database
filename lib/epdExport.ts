@@ -129,8 +129,15 @@ export async function exportToWorkbook(
   if (data instanceof ArrayBuffer) {
     return data;
   }
-  if (ArrayBuffer.isView(data)) {
-    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  if (typeof SharedArrayBuffer !== 'undefined' && data instanceof SharedArrayBuffer) {
+    return Uint8Array.from(new Uint8Array(data)).buffer;
   }
-  return new Uint8Array(data as ArrayBufferLike).buffer;
+  if (ArrayBuffer.isView(data)) {
+    const view = data as ArrayBufferView;
+    const bytes = view instanceof Uint8Array
+      ? view
+      : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    return Uint8Array.from(bytes).buffer;
+  }
+  return Uint8Array.from(new Uint8Array(data as ArrayBufferLike)).buffer;
 }
