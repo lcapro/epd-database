@@ -159,8 +159,17 @@ function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined
 
 function sliceFallbackSection(text: string, setType: EpdSetType): string | undefined {
   const lower = text.toLowerCase();
-  const impactIdx = lower.search(/environmental impact|milieu-?impact/);
+  let impactIdx = lower.search(/environmental impact|milieu-?impact/);
   if (impactIdx < 0) return undefined;
+
+  const resultsIdx = lower.indexOf('results');
+  if (resultsIdx >= 0) {
+    const afterResults = lower.slice(resultsIdx);
+    const resultsImpactIdx = afterResults.search(/environmental impact|milieu-?impact/);
+    if (resultsImpactIdx >= 0) {
+      impactIdx = resultsIdx + resultsImpactIdx;
+    }
+  }
 
   if (setType === 'SBK_SET_2') {
     const endCandidates = [
