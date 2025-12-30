@@ -142,8 +142,8 @@ export const pvcEcochainParser = {
         })
       : { results: [], modules: [], mndModules: new Set<string>() };
 
-    const set2IndicatorSet = new Set(INDICATOR_CODES_SET_2);
-    const set2Results = set2Parsed.results.filter((row) => set2IndicatorSet.has(row.indicator as string));
+    const set2IndicatorSet = new Set<string>(INDICATOR_CODES_SET_2);
+    const set2Results = set2Parsed.results.filter((row) => set2IndicatorSet.has(String(row.indicator)));
     let results = [...set1Parsed.results, ...set2Results];
 
     const rowHasValues = (row: typeof results[number] | undefined) =>
