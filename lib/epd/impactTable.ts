@@ -216,7 +216,11 @@ function extractModuleHeader(lines: string[]): string[] {
 }
 
 function insertConcatenatedSeparators(text: string): string {
-  return text.replace(/E([+-]?\d+)(?=\d)/gi, 'E$1 ');
+  const withZeros = text.replace(/E([+-]?\d)(0{1,})(?=\d[.,])/gi, (_match, exp, zeros) => {
+    const spacedZeros = Array(zeros.length).fill('0').join(' ');
+    return `E${exp} ${spacedZeros} `;
+  });
+  return withZeros.replace(/E([+-]?\d)(?=\d[.,])/gi, 'E$1 ');
 }
 
 function insertDecimalSeparators(text: string): string {
