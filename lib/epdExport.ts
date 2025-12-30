@@ -125,9 +125,12 @@ export async function exportToWorkbook(
     rows.forEach((row) => sheet.addRow(row));
   }
 
-  const arrayBuffer = await workbook.xlsx.writeBuffer();
-  if (Buffer.isBuffer(arrayBuffer)) {
-    return arrayBuffer.buffer.slice(arrayBuffer.byteOffset, arrayBuffer.byteOffset + arrayBuffer.byteLength);
+  const data: unknown = await workbook.xlsx.writeBuffer();
+  if (data instanceof ArrayBuffer) {
+    return data;
   }
-  return arrayBuffer;
+  if (ArrayBuffer.isView(data)) {
+    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  }
+  return new Uint8Array(data as ArrayBufferLike).buffer;
 }
