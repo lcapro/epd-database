@@ -159,8 +159,31 @@ function sliceResultsSection(text: string, setNo: '1' | '2'): string | undefined
 
 function sliceFallbackSection(text: string, setType: EpdSetType): string | undefined {
   const lower = text.toLowerCase();
-  const impactIdx = lower.search(/environmental impact|milieu-?impact/);
+  let impactIdx = lower.search(/environmental impact|milieu-?impact/);
   if (impactIdx < 0) return undefined;
+
+  const resultsIdx = lower.indexOf('results');
+  if (resultsIdx >= 0) {
+    const afterResults = lower.slice(resultsIdx);
+    const resultsImpactIdx = afterResults.search(/environmental impact|milieu-?impact/);
+    if (resultsImpactIdx >= 0) {
+      impactIdx = resultsIdx + resultsImpactIdx;
+    }
+  }
+
+  if (setType === 'SBK_SET_2') {
+    const set2IndicatorRe =
+      /gwp-total|gwp-f|gwp-b|gwp-luluc|ep-fw|ep-m|ep-t|adp-mm|adp-f|wdp|pm|ir|etp-fw|htp-c|htp-nc|sqp/;
+    for (const match of lower.matchAll(/environmental impact|milieu-?impact/g)) {
+      const idx = match.index ?? 0;
+      if (idx < impactIdx) continue;
+      const window = lower.slice(idx, idx + 4000);
+      if (set2IndicatorRe.test(window)) {
+        impactIdx = idx;
+        break;
+      }
+    }
+  }
 
   if (setType === 'SBK_SET_2') {
     const endCandidates = [
