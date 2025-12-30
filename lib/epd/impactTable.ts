@@ -60,6 +60,17 @@ const TOKEN_RE = /MND|[+-]?\d+(?:[.,]\d+)?(?:E[+-]?\d+)?/gi;
 
 const moduleRegex = /\b(A1-A3|A1|A2|A3|B\d|C[1-4]|D|Totaal|Total)\b/gi;
 
+function collectModuleTokens(text: string): string[] {
+  const regex = new RegExp(moduleRegex.source, 'gi');
+  const tokens: string[] = [];
+  let match = regex.exec(text);
+  while (match) {
+    tokens.push(match[1]);
+    match = regex.exec(text);
+  }
+  return tokens;
+}
+
 function parseNumberToken(tok: string): number | null {
   if (/^MND$/i.test(tok)) return null;
   if (/^0+$/.test(tok)) return 0;
@@ -188,9 +199,9 @@ function extractModuleHeader(lines: string[]): string[] {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (!line) continue;
-    const tokens = Array.from(line.matchAll(moduleRegex)).map((m) => m[1]);
+    const tokens = collectModuleTokens(line);
     if (tokens.length >= 3) {
-      const nextTokens = Array.from(lines[i + 1]?.matchAll(moduleRegex) || []).map((m) => m[1]);
+      const nextTokens = lines[i + 1] ? collectModuleTokens(lines[i + 1]) : [];
       const merged = [...tokens, ...nextTokens];
       const normalized = merged.map((t) => (t.toLowerCase() === 'totaal' ? 'Total' : t));
       const unique: string[] = [];
@@ -279,7 +290,7 @@ export function parseImpactTableDynamic(
       }
     }
     const lowerLine = line.toLowerCase();
-    const headerTokens = Array.from(line.matchAll(moduleRegex)).map((m) => m[1]);
+    const headerTokens = collectModuleTokens(line);
     if (!indicator && (lowerLine.includes('environmental impact') || (lowerLine.includes('unit') && headerTokens.length >= 3))) {
       continue;
     }
