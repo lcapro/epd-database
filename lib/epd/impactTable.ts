@@ -216,7 +216,8 @@ function extractModuleHeader(lines: string[]): string[] {
 }
 
 function insertConcatenatedSeparators(text: string): string {
-  const withZeros = text.replace(/E([+-]?\d{1,3})(0{1,})(?=\d[.,])/gi, (_match, exp, zeros) => {
+  const splitShortExponent = text.replace(/E([+-]?\d)(\d)(?=[.,]\d)/gi, 'E$1 $2');
+  const withZeros = splitShortExponent.replace(/E([+-]?\d{1,3})(0{1,})(?=\d[.,])/gi, (_match, exp, zeros) => {
     const spacedZeros = Array(zeros.length).fill('0').join(' ');
     return `E${exp} ${spacedZeros} `;
   });
