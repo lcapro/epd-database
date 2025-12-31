@@ -9,8 +9,20 @@ function requireEnv(name: string, value: string | undefined): string {
 
 let supabaseClient: SupabaseClient | undefined;
 let adminClient: SupabaseClient | undefined;
+let envLogged = false;
+
+function logEnvStatus() {
+  if (envLogged || typeof window !== 'undefined') return;
+  envLogged = true;
+  console.info('Supabase env check', {
+    hasUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
+}
 
 export function getSupabaseClient(): SupabaseClient {
+  logEnvStatus();
   if (!supabaseClient) {
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
     const supabaseAnonKey = requireEnv(
@@ -25,6 +37,7 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 export function getAdminClient(): SupabaseClient {
+  logEnvStatus();
   if (!adminClient) {
     const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
     const serviceRoleKey = requireEnv(

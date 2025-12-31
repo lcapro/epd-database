@@ -6,6 +6,8 @@ export interface ExportEpdShape extends EpdRecord {
   impacts: EpdImpactRecord[];
 }
 
+export type DatabaseExportRow = Record<string, string | number | null>;
+
 const defaultStages = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
 const defaultIndicators = ['MKI', 'CO2', ...ALL_INDICATOR_CODES.filter((code) => !['MKI', 'CO2'].includes(code))] as const;
 const defaultSets = ['SBK_SET_1', 'SBK_SET_2'] as const;
@@ -94,6 +96,23 @@ export function buildExportRows(epds: ExportEpdShape[]) {
 
     return row;
   });
+}
+
+export function buildDatabaseExportRows(epds: EpdRecord[]): DatabaseExportRow[] {
+  return epds.map((epd) => ({
+    Productnaam: epd.product_name,
+    Producent: epd.producer_name ?? '',
+    'Functionele eenheid': epd.functional_unit,
+    'MKI A1-A3': epd.mki_a1a3 ?? null,
+    'MKI D': epd.mki_d ?? null,
+    'CO2 A1-A3': epd.co2_a1a3 ?? null,
+    'CO2 D': epd.co2_d ?? null,
+    'Bepalingsmethode versie': epd.determination_method_version ?? '',
+    'PCR versie': epd.pcr_version ?? '',
+    Databaseversie: epd.database_version ?? '',
+    Producentcategorie: epd.product_category ?? '',
+    'Datum toegevoegd': epd.created_at ?? '',
+  }));
 }
 
 export function exportToCsv(rows: Record<string, RowValue>[]): string {

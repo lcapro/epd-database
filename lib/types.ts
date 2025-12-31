@@ -92,11 +92,15 @@ export interface EpdRecord {
   product_name: string;
   functional_unit: string;
   producer_name?: string | null;
+  manufacturer?: string | null;
 
   lca_method?: string | null;
+  determination_method_name?: string | null;
+  determination_method_version?: string | null;
   pcr_version?: string | null;
 
   database_name?: string | null;
+  database_version?: string | null;
   database_nmd_version?: string | null;
   database_ecoinvent_version?: string | null;
 
@@ -106,6 +110,17 @@ export interface EpdRecord {
 
   standard_set: EpdSetType;
   custom_attributes: Record<string, string>;
+
+  product_category?: string | null;
+  mki_a1a3?: number | null;
+  mki_d?: number | null;
+  co2_a1a3?: number | null;
+  co2_d?: number | null;
+  raw_extracted?: Record<string, unknown> | null;
+  status?: string | null;
+  status_reason?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface EpdImpactRecord {
