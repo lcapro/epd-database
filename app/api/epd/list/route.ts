@@ -32,6 +32,7 @@ export async function GET(request: Request) {
         'co2_a1a3',
         'co2_d',
         'created_at',
+        'updated_at',
         'status',
       ].join(', '),
       { count: 'exact' },

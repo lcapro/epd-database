@@ -131,6 +131,65 @@ export function buildDatabaseExportRows(epds: DatabaseExportRecord[]): DatabaseE
   }));
 }
 
+export type DatabaseExportWithImpacts = DatabaseExportRecord & { impacts: EpdImpactRecord[] };
+
+function buildDatabaseImpactColumns(epds: DatabaseExportWithImpacts[]) {
+  const { indicators, sets, stages } = collectImpactDimensions(epds);
+  const impactColumns: string[] = [];
+  indicators.forEach((indicator) => {
+    sets.forEach((setType) => {
+      stages.forEach((stage) => {
+        impactColumns.push(`${indicator} ${setType} ${stage}`);
+      });
+    });
+  });
+  return impactColumns;
+}
+
+export function buildDatabaseExportRowsWithImpacts(epds: DatabaseExportWithImpacts[]): DatabaseExportRow[] {
+  const baseColumns = [
+    'Productnaam',
+    'Producent',
+    'Functionele eenheid',
+    'MKI A1-A3',
+    'MKI D',
+    'CO2 A1-A3',
+    'CO2 D',
+    'Bepalingsmethode versie',
+    'PCR versie',
+    'Databaseversie',
+    'Producentcategorie',
+    'Datum toegevoegd',
+  ];
+  const impactColumns = buildDatabaseImpactColumns(epds);
+  const columns = [...baseColumns, ...impactColumns];
+
+  return epds.map((epd) => {
+    const row: DatabaseExportRow = {};
+    columns.forEach((col) => { row[col] = null; });
+
+    row.Productnaam = epd.product_name;
+    row.Producent = epd.producer_name ?? '';
+    row['Functionele eenheid'] = epd.functional_unit;
+    row['MKI A1-A3'] = epd.mki_a1a3 ?? null;
+    row['MKI D'] = epd.mki_d ?? null;
+    row['CO2 A1-A3'] = epd.co2_a1a3 ?? null;
+    row['CO2 D'] = epd.co2_d ?? null;
+    row['Bepalingsmethode versie'] = epd.determination_method_version ?? '';
+    row['PCR versie'] = epd.pcr_version ?? '';
+    row.Databaseversie = epd.database_version ?? '';
+    row.Producentcategorie = epd.product_category ?? '';
+    row['Datum toegevoegd'] = epd.created_at ?? '';
+
+    epd.impacts.forEach((impact) => {
+      const key = `${impact.indicator} ${impact.set_type} ${impact.stage}`;
+      row[key] = impact.value ?? null;
+    });
+
+    return row;
+  });
+}
+
 export function exportToCsv(rows: Record<string, RowValue>[]): string {
   if (rows.length === 0) return '';
   const header = Object.keys(rows[0]);

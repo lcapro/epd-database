@@ -15,6 +15,7 @@ export type EpdListFilters = {
 
 const ALLOWED_SORT_COLUMNS = new Set([
   'created_at',
+  'updated_at',
   'product_name',
   'producer_name',
   'mki_a1a3',
