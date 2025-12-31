@@ -159,13 +159,13 @@ export async function POST(request: Request) {
       const stage = String(impact.stage || '').trim();
       const { value } = parseNumberLike(impact.value);
       if (!indicator || !stage || value === null) return null;
-      const unit = typeof impact.unit === 'string' ? impact.unit.trim() : null;
+      const unit = typeof impact.unit === 'string' ? impact.unit.trim() : undefined;
       return {
         indicator,
         setType,
         stage,
         value,
-        unit: unit || null,
+        unit: unit || undefined,
       };
     })
     .filter((impact): impact is NonNullable<typeof impact> => Boolean(impact));
