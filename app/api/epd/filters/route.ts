@@ -26,7 +26,10 @@ async function fetchColumnValues(admin: ReturnType<typeof getAdminClient>, colum
   if (error) {
     return [];
   }
-  return data.map((row) => (row as Record<string, string | null>)[column] ?? null);
+  return data.map((row) => {
+    const record = row as unknown as Record<string, string | null>;
+    return record[column] ?? null;
+  });
 }
 
 export async function GET() {
