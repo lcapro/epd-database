@@ -1,4 +1,4 @@
-import type { PostgrestFilterBuilder } from '@supabase/supabase-js';
+import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 export type EpdListFilters = {
   page: number;
