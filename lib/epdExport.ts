@@ -98,7 +98,23 @@ export function buildExportRows(epds: ExportEpdShape[]) {
   });
 }
 
-export function buildDatabaseExportRows(epds: EpdRecord[]): DatabaseExportRow[] {
+export type DatabaseExportRecord = Pick<
+  EpdRecord,
+  | 'product_name'
+  | 'producer_name'
+  | 'functional_unit'
+  | 'mki_a1a3'
+  | 'mki_d'
+  | 'co2_a1a3'
+  | 'co2_d'
+  | 'determination_method_version'
+  | 'pcr_version'
+  | 'database_version'
+  | 'product_category'
+  | 'created_at'
+>;
+
+export function buildDatabaseExportRows(epds: DatabaseExportRecord[]): DatabaseExportRow[] {
   return epds.map((epd) => ({
     Productnaam: epd.product_name,
     Producent: epd.producer_name ?? '',
