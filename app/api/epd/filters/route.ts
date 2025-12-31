@@ -21,12 +21,13 @@ async function fetchColumnValues(admin: ReturnType<typeof getAdminClient>, colum
     .select(column)
     .not(column, 'is', null)
     .order(column, { ascending: true })
-    .limit(500);
+    .limit(500)
+    .returns<Record<string, string | null>[]>();
 
   if (error) {
     return [];
   }
-  return data.map((row) => (row as Record<string, string | null>)[column] ?? null);
+  return data.map((row) => row[column] ?? null);
 }
 
 export async function GET() {

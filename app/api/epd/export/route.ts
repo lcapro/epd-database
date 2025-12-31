@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseClient';
 import { buildDatabaseExportRows, exportToCsv, exportToWorkbook } from '@/lib/epdExport';
+import type { DatabaseExportRecord } from '@/lib/epdExport';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
 
 export const runtime = 'nodejs';
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
   const sortColumn = filters.sort ?? 'publication_date';
   query = query.order(sortColumn, { ascending: filters.order === 'asc' });
 
-  const { data, error } = await query;
+  const { data, error } = await query.returns<DatabaseExportRecord[]>();
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message || 'Geen data' }, { status: 500 });

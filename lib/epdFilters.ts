@@ -1,4 +1,4 @@
-import type { PostgrestFilterBuilder } from '@supabase/supabase-js';
+import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 export type EpdListFilters = {
   page: number;
@@ -52,7 +52,10 @@ export function parseEpdListFilters(searchParams: URLSearchParams): EpdListFilte
   };
 }
 
-export function applyEpdListFilters<T>(query: PostgrestFilterBuilder<T>, filters: EpdListFilters) {
+export function applyEpdListFilters(
+  query: PostgrestFilterBuilder<any, any, any, any>,
+  filters: EpdListFilters,
+) {
   let nextQuery = query;
 
   if (filters.search) {
