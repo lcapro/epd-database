@@ -12,6 +12,7 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Detailpagina met alle impactwaarden en downloadlink naar PDF
 - Export naar Excel of CSV
 - Klaar voor deployment op Vercel (geen GitHub Pages)
+- EPD databasepagina met filters, server-side paginatie en Excel-export
 
 ## Projectstructuur
 - `app/` – App Router pagina's en API routes
@@ -35,9 +36,11 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPABASE_STORAGE_BUCKET` (en `NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET`) – standaard `epd-pdfs`
    - `NEXT_PUBLIC_BASE_PATH` (optioneel, voor deployment onder subpad)
-4. Voer de migratie uit in Supabase (SQL editor):
+4. Voer de migraties uit in Supabase (SQL editor):
    ```sql
    -- supabase/migrations/001_init.sql
+   -- supabase/migrations/002_add_unit_to_epd_impacts.sql
+   -- supabase/migrations/003_epd_database_fields.sql
    ```
 5. Start de ontwikkelserver:
    ```bash
@@ -53,6 +56,16 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 
 ## Export
 - Gebruik de knop "Exporteer naar Excel" op de overzichtspagina, of roep `/api/epd/export?format=excel|csv` rechtstreeks aan.
+
+## EPD database
+- De pagina `/epd-database` toont opgeslagen EPD's met filters, sortering en server-side paginatie.
+- Filters worden via query parameters gedeeld (bijv. `?producerName=...&pcrVersion=...`).
+- Export respecteert de actuele filters en sortering.
+
+### Troubleshooting Supabase opslaan
+- Controleer dat `SUPABASE_SERVICE_ROLE_KEY` is ingesteld in Vercel en lokaal (de server gebruikt deze key voor inserts).
+- Zorg dat de migraties zijn uitgevoerd zodat kolommen overeenkomen met de payload.
+- Kijk in de server logs voor een requestId en Supabase error code zonder secrets.
 
 ## How to add a new EPD format parser
 1. Voeg een nieuwe parser toe in `lib/epd/parsers/` (bijv. `myFormat.ts`).
