@@ -8,9 +8,6 @@ export default function HomePage() {
         Beheer Environmental Product Declarations voor infrastructuurproducten.
       </p>
       <div className="mt-4 flex gap-3">
-        <Link href="/epd" className="button button-primary">
-          Bekijk EPD&apos;s
-        </Link>
         <Link href="/epd-database" className="button button-secondary">
           EPD database
         </Link>

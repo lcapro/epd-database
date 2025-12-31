@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseClient';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const filters = parseEpdListFilters(searchParams);
@@ -47,10 +49,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({
-    items: data || [],
-    total: count || 0,
-    page: filters.page,
-    pageSize: filters.pageSize,
-  });
+  return NextResponse.json(
+    {
+      items: data || [],
+      total: count || 0,
+      page: filters.page,
+      pageSize: filters.pageSize,
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    },
+  );
 }

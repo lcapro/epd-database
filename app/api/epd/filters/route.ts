@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseClient';
 
+export const dynamic = 'force-dynamic';
+
 type FilterOptions = {
   determinationMethodVersions: string[];
   pcrVersions: string[];
@@ -55,5 +57,9 @@ export async function GET() {
     productCategories: uniq(productCategories),
   };
 
-  return NextResponse.json(payload);
+  return NextResponse.json(payload, {
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  });
 }
