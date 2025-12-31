@@ -36,7 +36,15 @@ type FilterOptions = {
   productCategories: string[];
 };
 
-type SortKey = 'created_at' | 'product_name' | 'producer_name' | 'mki_a1a3' | 'mki_d' | 'co2_a1a3' | 'co2_d';
+type SortKey =
+  | 'created_at'
+  | 'updated_at'
+  | 'product_name'
+  | 'producer_name'
+  | 'mki_a1a3'
+  | 'mki_d'
+  | 'co2_a1a3'
+  | 'co2_d';
 
 const defaultFilters = {
   q: '',
@@ -89,7 +97,7 @@ export default function EpdDatabaseClient() {
   const [error, setError] = useState<string | null>(null);
 
   const page = Number(searchParams.get('page') || '1');
-  const sort = (searchParams.get('sort') as SortKey | null) ?? 'created_at';
+  const sort = (searchParams.get('sort') as SortKey | null) ?? 'updated_at';
   const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
   const defaultSortParams = useMemo(() => ({ sort, order }), [sort, order]);
 

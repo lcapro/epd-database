@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseClient';
-import { buildDatabaseExportRows, exportToCsv, exportToWorkbook } from '@/lib/epdExport';
-import type { DatabaseExportRecord } from '@/lib/epdExport';
+import { buildDatabaseExportRowsWithImpacts, exportToCsv, exportToWorkbook } from '@/lib/epdExport';
+import type { DatabaseExportRecord, DatabaseExportWithImpacts } from '@/lib/epdExport';
+import type { EpdImpactRecord } from '@/lib/types';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
 
 export const runtime = 'nodejs';
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
         'database_version',
         'product_category',
         'created_at',
+        'epd_impacts (indicator, set_type, stage, value, unit)',
       ].join(', '),
     );
 
@@ -37,13 +39,19 @@ export async function GET(request: Request) {
   const sortColumn = filters.sort ?? 'publication_date';
   query = query.order(sortColumn, { ascending: filters.order === 'asc' });
 
-  const { data, error } = await query.returns<DatabaseExportRecord[]>();
+  const { data, error } = await query.returns<
+    (DatabaseExportRecord & { epd_impacts: EpdImpactRecord[] | null })[]
+  >();
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message || 'Geen data' }, { status: 500 });
   }
 
-  const rows = buildDatabaseExportRows(data);
+  const withImpacts: DatabaseExportWithImpacts[] = data.map((epd) => ({
+    ...epd,
+    impacts: epd.epd_impacts ?? [],
+  }));
+  const rows = buildDatabaseExportRowsWithImpacts(withImpacts);
 
   if (format === 'csv') {
     const csv = exportToCsv(rows);
