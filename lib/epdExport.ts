@@ -21,7 +21,7 @@ function mergeOrdered(defaults: readonly string[], extras: string[]) {
   return [...defaults, ...uniqueExtras];
 }
 
-function collectImpactDimensions(epds: ExportEpdShape[]) {
+function collectImpactDimensions<T extends { impacts: EpdImpactRecord[] }>(epds: T[]) {
   const indicators: string[] = [];
   const sets: string[] = [];
   const stages: string[] = [];
