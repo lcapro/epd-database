@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabaseClient';
 import { buildDatabaseExportRows, exportToCsv, exportToWorkbook } from '@/lib/epdExport';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
+import type { EpdRecord } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
         'product_category',
         'created_at',
       ].join(', '),
-    );
+    )
+    .returns<EpdRecord[]>();
 
   query = applyEpdListFilters(query, filters);
 
