@@ -39,7 +39,7 @@ export default function HomePage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-600" />
-              Klaar voor bedrijven
+              Bewerkbaar waar nodig
             </div>
           </div>
         </div>
