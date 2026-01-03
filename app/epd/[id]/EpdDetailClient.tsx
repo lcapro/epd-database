@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { EpdImpactRecord, EpdRecord } from '@/lib/types';
 import {
   Badge,
@@ -64,8 +65,11 @@ const ALL_INDICATORS = [
 const SETS = ['SBK_SET_1', 'SBK_SET_2', 'UNKNOWN'] as const;
 
 export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: Props) {
+  const router = useRouter();
   // gebruiker kan straks zelf kiezen welke impactcategorieën zichtbaar zijn
   const [visibleIndicators, setVisibleIndicators] = useState<string[]>(['MKI', 'GWP']);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const indicatorOptions = useMemo(() => {
     // toon alle bekende indicatoren + alles wat in DB voorkomt (toekomstproof)
@@ -96,9 +100,45 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
       <Card>
         <CardHeader className="space-y-2">
           <Badge variant="brand">EPD detail</Badge>
-          <CardTitle>{epd.product_name}</CardTitle>
-          <CardDescription>{epd.functional_unit}</CardDescription>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>{epd.product_name}</CardTitle>
+              <CardDescription>{epd.functional_unit}</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" onClick={() => router.push(`/epd/${epd.id}/edit`)}>
+                Bewerken
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                loading={deleteLoading}
+                onClick={async () => {
+                  if (!confirm('Weet je zeker dat je deze EPD wilt verwijderen?')) return;
+                  setDeleteLoading(true);
+                  setDeleteError(null);
+                  try {
+                    const res = await fetch(`/api/epd/${epd.id}`, { method: 'DELETE' });
+                    if (!res.ok) {
+                      const json = await res.json().catch(() => ({}));
+                      throw new Error(json?.error || 'Verwijderen mislukt');
+                    }
+                    router.push('/epd-database');
+                    router.refresh();
+                  } catch (err) {
+                    setDeleteError((err as Error).message);
+                  } finally {
+                    setDeleteLoading(false);
+                  }
+                }}
+              >
+                Verwijderen
+              </Button>
+            </div>
+          </div>
         </CardHeader>
+
+        {deleteError && <p className="mt-2 text-sm text-red-600">{deleteError}</p>}
 
         <div className="mt-4 grid gap-3 text-sm text-gray-700 md:grid-cols-2 lg:grid-cols-3">
           <div><strong>Producent:</strong> {epd.producer_name || '-'}</div>
