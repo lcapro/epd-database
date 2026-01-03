@@ -183,6 +183,20 @@ function sliceFallbackSection(text: string, setType: EpdSetType): string | undef
   }
 
   if (setType === 'SBK_SET_2') {
+    const set2IndicatorRe =
+      /gwp-total|gwp-f|gwp-b|gwp-luluc|ep-fw|ep-m|ep-t|adp-mm|adp-f|wdp|pm|ir|etp-fw|htp-c|htp-nc|sqp/;
+    for (const match of lower.matchAll(/environmental impact|milieu-?impact/g)) {
+      const idx = match.index ?? 0;
+      if (idx < impactIdx) continue;
+      const window = lower.slice(idx, idx + 4000);
+      if (set2IndicatorRe.test(window)) {
+        impactIdx = idx;
+        break;
+      }
+    }
+  }
+
+  if (setType === 'SBK_SET_2') {
     const endCandidates = [
       lower.indexOf('resource use', impactIdx),
       lower.indexOf('resource consumption', impactIdx),
