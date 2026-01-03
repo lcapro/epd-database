@@ -10,6 +10,14 @@ export function absoluteUrl(path: string) {
 
   const proto = headersList.get('x-forwarded-proto') ?? 'https';
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const basePathEnv = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+  const normalizedBasePath = basePathEnv
+    ? `/${basePathEnv.replace(/^\/|\/$/g, '')}`
+    : '';
+  const fullPath =
+    normalizedBasePath && !normalizedPath.startsWith(normalizedBasePath)
+      ? `${normalizedBasePath}${normalizedPath}`
+      : normalizedPath;
 
-  return `${proto}://${host}${normalizedPath}`;
+  return `${proto}://${host}${fullPath}`;
 }
