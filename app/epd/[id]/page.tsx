@@ -1,4 +1,5 @@
 import type { EpdImpactRecord, EpdRecord } from '@/lib/types';
+import { absoluteUrl } from '@/lib/absoluteUrl';
 import EpdDetailClient from './EpdDetailClient';
 
 interface ApiResponse {
@@ -7,7 +8,7 @@ interface ApiResponse {
 }
 
 const fetchEpd = async (id: string) => {
-  const res = await fetch(`/api/epd/${id}`, { cache: 'no-store' });
+  const res = await fetch(absoluteUrl(`/api/epd/${id}`), { cache: 'no-store' });
   if (!res.ok) throw new Error('Kan EPD niet laden');
   return res.json() as Promise<ApiResponse>;
 };
