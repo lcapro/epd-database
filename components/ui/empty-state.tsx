@@ -6,12 +6,16 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
   className,
 }: {
   title: string;
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   className?: string;
 }) {
   return (
@@ -23,10 +27,19 @@ export function EmptyState({
     >
       <h4 className="text-base font-semibold text-gray-900">{title}</h4>
       {description && <p className="mt-2 text-sm text-gray-600">{description}</p>}
-      {actionLabel && onAction && (
-        <Button variant="secondary" size="sm" className="mt-4" onClick={onAction}>
-          {actionLabel}
-        </Button>
+      {(actionLabel || secondaryActionLabel) && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {actionLabel && onAction && (
+            <Button variant="secondary" size="sm" onClick={onAction}>
+              {actionLabel}
+            </Button>
+          )}
+          {secondaryActionLabel && onSecondaryAction && (
+            <Button variant="secondary" size="sm" onClick={onSecondaryAction}>
+              {secondaryActionLabel}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
