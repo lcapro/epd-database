@@ -4,6 +4,24 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
 import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  FormField,
+  Input,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui';
+import {
   ALL_INDICATOR_CODES,
   IMPACT_INDICATORS,
   INDICATOR_CODES_SET_1,
@@ -268,40 +286,41 @@ export default function UploadPage() {
 
     return (
       <div key={`${indicator}-${setType}`} className="space-y-2">
-        <div className="flex-between">
-          <div className="text-sm font-semibold">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-gray-800">
             {meta.label} ({indicator})
           </div>
-          <div className="text-xs text-slate-500">Unit: {unit || '-'}</div>
+          <div className="text-xs text-gray-500">Unit: {unit || '-'}</div>
         </div>
 
-        <table className="table">
-          <thead>
-            <tr>
-              {stages.map((stage) => (
-                <th key={stage}>{stage.replace('_', '-')}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {stages.map((stage) => {
-                const key = impactKey(indicator, setType, stage);
-                return (
-                  <td key={key}>
-                    <input
-                      type="number"
-                      step="any"
-                      className="input"
-                      value={impactValues[key] ?? ''}
-                      onChange={(e) => updateImpact(indicator, setType, stage, e.target.value)}
-                    />
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto rounded-2xl border border-gray-100">
+          <Table>
+            <TableHead>
+              <TableRow>
+                {stages.map((stage) => (
+                  <TableHeaderCell key={stage}>{stage.replace('_', '-')}</TableHeaderCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              <TableRow>
+                {stages.map((stage) => {
+                  const key = impactKey(indicator, setType, stage);
+                  return (
+                    <TableCell key={key}>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={impactValues[key] ?? ''}
+                        onChange={(e) => updateImpact(indicator, setType, stage, e.target.value)}
+                      />
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
       </div>
     );
   };
@@ -309,9 +328,9 @@ export default function UploadPage() {
   const parsedInfo = useMemo(() => {
     if (!parsed) return null;
     return (
-      <div className="p-3 bg-slate-50 border border-slate-200 rounded">
-        <p className="text-sm text-slate-600">Gevonden velden uit PDF:</p>
-        <div className="grid-two mt-2 text-sm">
+      <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+        <p className="text-sm text-gray-600">Gevonden velden uit PDF:</p>
+        <div className="mt-3 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
           <div><strong>Product:</strong> {parsed.productName || '-'}</div>
           <div><strong>Functionele eenheid:</strong> {parsed.functionalUnit || '-'}</div>
           <div><strong>Producent:</strong> {parsed.producerName || '-'}</div>
@@ -326,150 +345,130 @@ export default function UploadPage() {
   }, [parsed]);
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
-      <div className="card space-y-4">
-        <div className="flex-between">
+    <form className="space-y-6" onSubmit={onSubmit}>
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Nieuwe EPD uploaden</h2>
-            <p className="text-sm text-slate-600">Upload een PDF, controleer de waarden en sla op.</p>
+            <Badge variant="brand">Nieuwe upload</Badge>
+            <CardTitle className="mt-2">Nieuwe EPD uploaden</CardTitle>
+            <CardDescription>Upload een PDF en controleer de gegevens.</CardDescription>
           </div>
-          <button type="button" className="button button-primary" onClick={uploadFile} disabled={loading}>
+          <Button type="button" onClick={uploadFile} disabled={loading} loading={loading}>
             PDF verwerken
-          </button>
-        </div>
+          </Button>
+        </CardHeader>
 
         <div
-          className="border-2 border-dashed border-slate-300 rounded-md p-6 bg-white text-center"
+          className="mt-6 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-6 text-center"
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <p className="text-sm text-slate-600">Sleep een PDF hierheen of kies een bestand.</p>
+          <p className="text-sm text-gray-600">Sleep een PDF hierheen of kies een bestand.</p>
           <input
             type="file"
             accept="application/pdf"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="mt-3"
+            className="mt-3 text-sm"
           />
-          {file && <p className="text-sm mt-2">Geselecteerd: {file.name}</p>}
+          {file && <p className="mt-2 text-sm text-gray-700">Geselecteerd: {file.name}</p>}
         </div>
 
-      {parsedInfo}
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      {parseWarning && <div className="text-amber-600 text-sm">{parseWarning}</div>}
-    </div>
+        {parsedInfo}
+        {error && <Alert variant="danger" className="mt-4">{error}</Alert>}
+        {parseWarning && <Alert variant="warning" className="mt-4">{parseWarning}</Alert>}
+      </Card>
 
-      <div className="card space-y-3">
-        <h3 className="font-semibold">Basisgegevens</h3>
-        <div className="grid-two gap-3">
-          <label className="space-y-1">
-            <span className="text-sm">Productnaam</span>
-            <input
-              className="input"
+      <Card>
+        <CardHeader>
+          <CardTitle>Basisgegevens</CardTitle>
+          <CardDescription>Controleer de kerngegevens.</CardDescription>
+        </CardHeader>
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <FormField label="Productnaam" required>
+            <Input
               value={form.productName}
               onChange={(e) => setForm({ ...form, productName: e.target.value })}
               required
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Functionele eenheid</span>
-            <input
-              className="input"
+          <FormField label="Functionele eenheid" required>
+            <Input
               value={form.functionalUnit}
               onChange={(e) => setForm({ ...form, functionalUnit: e.target.value })}
               required
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Producent</span>
-            <input
-              className="input"
+          <FormField label="Producent">
+            <Input
               value={form.producerName}
               onChange={(e) => setForm({ ...form, producerName: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">LCA-methode</span>
-            <input
-              className="input"
+          <FormField label="LCA-methode">
+            <Input
               value={form.lcaMethod}
               onChange={(e) => setForm({ ...form, lcaMethod: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">PCR-versie</span>
-            <input
-              className="input"
+          <FormField label="PCR-versie">
+            <Input
               value={form.pcrVersion}
               onChange={(e) => setForm({ ...form, pcrVersion: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Database</span>
-            <input
-              className="input"
+          <FormField label="Database">
+            <Input
               value={form.databaseName}
               onChange={(e) => setForm({ ...form, databaseName: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">NMD database versie</span>
-            <input
-              className="input"
+          <FormField label="NMD database versie">
+            <Input
               value={form.databaseNmdVersion}
               onChange={(e) => setForm({ ...form, databaseNmdVersion: e.target.value })}
               placeholder="bijv. NMD v3.5"
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">EcoInvent versie</span>
-            <input
-              className="input"
+          <FormField label="EcoInvent versie">
+            <Input
               value={form.databaseEcoinventVersion}
               onChange={(e) => setForm({ ...form, databaseEcoinventVersion: e.target.value })}
               placeholder="bijv. EcoInvent v3.6"
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Datum publicatie</span>
-            <input
+          <FormField label="Datum publicatie">
+            <Input
               type="date"
-              className="input"
               value={form.publicationDate}
               onChange={(e) => setForm({ ...form, publicationDate: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Einde geldigheid</span>
-            <input
+          <FormField label="Einde geldigheid">
+            <Input
               type="date"
-              className="input"
               value={form.expirationDate}
               onChange={(e) => setForm({ ...form, expirationDate: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">Naam toetser / verificateur</span>
-            <input
-              className="input"
+          <FormField label="Naam toetser / verificateur">
+            <Input
               value={form.verifierName}
               onChange={(e) => setForm({ ...form, verifierName: e.target.value })}
             />
-          </label>
+          </FormField>
 
-          <label className="space-y-1">
-            <span className="text-sm">SBK set</span>
-            <select
-              className="select"
+          <FormField label="SBK set">
+            <Select
               value={form.standardSet}
               onChange={(e) => setForm({ ...form, standardSet: e.target.value as EpdSetType })}
             >
@@ -478,51 +477,58 @@ export default function UploadPage() {
                   {opt.label}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </FormField>
         </div>
-      </div>
+      </Card>
 
       {/* IMPACT TABELLEN */}
-      <div className="card space-y-4">
-        <h3 className="font-semibold">Impactwaarden (per set)</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Impactwaarden (per set)</CardTitle>
+          <CardDescription>Vul ontbrekende waarden handmatig in.</CardDescription>
+        </CardHeader>
 
-        {/* Set 1 */}
-        <div className="space-y-4">
-          <h4 className="font-semibold">SBK_SET_1</h4>
-          {INDICATOR_CODES_SET_1.map((code) => renderIndicatorTable(code, 'SBK_SET_1'))}
+        <div className="mt-6 space-y-6">
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-gray-800">SBK_SET_1</h4>
+            {INDICATOR_CODES_SET_1.map((code) => renderIndicatorTable(code, 'SBK_SET_1'))}
+          </div>
+
+          <div className="space-y-4 border-t border-gray-100 pt-6">
+            <h4 className="text-sm font-semibold text-gray-800">SBK_SET_2</h4>
+            {INDICATOR_CODES_SET_2.map((code) => renderIndicatorTable(code, 'SBK_SET_2'))}
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Tip: ontbreekt er een waarde? Vul die handmatig in.
+          </p>
         </div>
+      </Card>
 
-        {/* Set 2 */}
-        <div className="space-y-4 pt-6 border-t">
-          <h4 className="font-semibold">SBK_SET_2</h4>
-          {INDICATOR_CODES_SET_2.map((code) => renderIndicatorTable(code, 'SBK_SET_2'))}
-        </div>
-
-        <p className="text-xs text-slate-500">
-          Tip: als een categorie niet automatisch uit de PDF komt, vul hem handmatig in. Later verbeteren we de parser.
-        </p>
-      </div>
-
-      <div className="card space-y-3">
-        <div className="flex-between">
-          <h3 className="font-semibold">Extra velden</h3>
-          <button
+      <Card>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Extra velden</CardTitle>
+            <CardDescription>Voeg extra metadata toe.</CardDescription>
+          </div>
+          <Button
             type="button"
-            className="button button-secondary"
+            variant="secondary"
             onClick={() => setCustomFields((fields) => [...fields, { key: '', value: '' }])}
           >
             Voeg veld toe
-          </button>
-        </div>
+          </Button>
+        </CardHeader>
 
-        {customFields.length === 0 && <p className="text-sm text-slate-600">Geen extra velden toegevoegd.</p>}
+        {customFields.length === 0 && (
+          <p className="mt-4 text-sm text-gray-600">Geen extra velden toegevoegd.</p>
+        )}
 
-        <div className="space-y-2">
+        <div className="mt-4 space-y-3">
           {customFields.map((field, idx) => (
-            <div className="grid-two gap-2" key={idx}>
-              <input
-                className="input"
+            <div className="grid gap-3 md:grid-cols-[1fr_2fr]" key={idx}>
+              <Input
                 placeholder="Sleutel"
                 value={field.key}
                 onChange={(e) =>
@@ -533,9 +539,9 @@ export default function UploadPage() {
                   })
                 }
               />
-              <div className="flex gap-2">
-                <input
-                  className="input flex-1"
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  className="flex-1"
                   placeholder="Waarde"
                   value={field.value}
                   onChange={(e) =>
@@ -546,26 +552,26 @@ export default function UploadPage() {
                     })
                   }
                 />
-                <button
+                <Button
                   type="button"
-                  className="button button-secondary"
+                  variant="secondary"
                   onClick={() => setCustomFields((prev) => prev.filter((_, i) => i !== idx))}
                 >
                   Verwijder
-                </button>
+                </Button>
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="flex gap-3">
-        <button type="submit" className="button button-primary" disabled={loading}>
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" disabled={loading} loading={loading}>
           Opslaan in database
-        </button>
-        <button type="button" className="button button-secondary" onClick={() => router.push('/epd')}>
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => router.push('/epd')}>
           Annuleren
-        </button>
+        </Button>
       </div>
     </form>
   );

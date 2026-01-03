@@ -2,6 +2,25 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  Input,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui';
+import { buttonStyles } from '@/components/ui/button';
 
 type EpdListItem = {
   id: string;
@@ -55,91 +74,88 @@ export default function EpdListPage() {
   }, [data]);
 
   return (
-    <div className="card space-y-4">
-      <div className="flex-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">EPD&apos;s</h2>
-          <p className="text-sm text-slate-600">Zoek en blader door geregistreerde EPD&apos;s.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/epd/upload" className="button button-secondary">
-            Nieuwe EPD uploaden
-          </Link>
-          <a href="/api/epd/export?format=excel" className="button button-primary">
-            Exporteer naar Excel
-          </a>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <Badge variant="brand">EPD overzicht</Badge>
+            <CardTitle className="mt-2">EPD&apos;s</CardTitle>
+            <CardDescription>Zoek en open geregistreerde EPD&apos;s.</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
+              Nieuwe EPD uploaden
+            </Link>
+            <a href="/api/epd/export?format=excel" className={buttonStyles({})}>
+              Exporteer naar Excel
+            </a>
+          </div>
+        </CardHeader>
 
-      <div className="flex gap-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Zoek op product of producent"
-          className="input"
-        />
-        <button className="button button-primary" onClick={() => { setPage(1); fetchData(); }}>
-          Zoeken
-        </button>
-      </div>
-
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      {loading && <div className="text-sm text-slate-600">Laden...</div>}
-
-      {data && (
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Producent</th>
-                <th>Functionele eenheid</th>
-                <th>Publicatie</th>
-                <th>Geldigheid</th>
-                <th>Set</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((epd) => (
-                <tr key={epd.id}>
-                  <td>
-                    <Link href={`/epd/${epd.id}`} className="text-sky-600 underline">
-                      {epd.product_name}
-                    </Link>
-                  </td>
-                  <td>{epd.producer_name || '-'}</td>
-                  <td>{epd.functional_unit}</td>
-                  <td>{epd.publication_date || '-'}</td>
-                  <td>{epd.expiration_date || '-'}</td>
-                  <td>{epd.standard_set}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Zoek op product of producent"
+          />
+          <Button onClick={() => { setPage(1); fetchData(); }}>
+            Zoeken
+          </Button>
         </div>
+      </Card>
+
+      {error && <Alert variant="danger">{error}</Alert>}
+      {loading && <Alert variant="info">Laden...</Alert>}
+
+      {data && data.items.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Product</TableHeaderCell>
+                  <TableHeaderCell>Producent</TableHeaderCell>
+                  <TableHeaderCell>Functionele eenheid</TableHeaderCell>
+                  <TableHeaderCell>Publicatie</TableHeaderCell>
+                  <TableHeaderCell>Geldigheid</TableHeaderCell>
+                  <TableHeaderCell>Set</TableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.items.map((epd) => (
+                  <TableRow key={epd.id}>
+                    <TableCell>
+                      <Link href={`/epd/${epd.id}`} className="font-semibold text-brand-700 hover:text-brand-800">
+                        {epd.product_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{epd.producer_name || '-'}</TableCell>
+                    <TableCell>{epd.functional_unit}</TableCell>
+                    <TableCell>{epd.publication_date || '-'}</TableCell>
+                    <TableCell>{epd.expiration_date || '-'}</TableCell>
+                    <TableCell>{epd.standard_set}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
 
-      <div className="flex-between">
-        <div className="text-sm text-slate-600">
-          Pagina {page} van {totalPages}
-        </div>
-        <div className="flex gap-2">
-          <button
-            className="button button-secondary"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            Vorige
-          </button>
-          <button
-            className="button button-secondary"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            Volgende
-          </button>
-        </div>
-      </div>
+      {data && data.items.length === 0 && (
+        <EmptyState
+          title="Geen EPD&apos;s gevonden"
+          description="Pas je zoekterm aan of upload een nieuwe EPD."
+          actionLabel="Nieuwe upload"
+          onAction={() => (window.location.href = '/epd/upload')}
+        />
+      )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={(nextPage) => setPage(nextPage)}
+      />
     </div>
   );
 }

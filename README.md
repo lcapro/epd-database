@@ -62,6 +62,15 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Filters worden via query parameters gedeeld (bijv. `?producerName=...&pcrVersion=...`).
 - Export respecteert de actuele filters en sortering.
 
+## UI redesign (InfraImpact look & feel)
+- Nieuwe design tokens en UI-kit componenten in `components/ui/`.
+- Layout met enterprise header/footer en ruimere content container.
+- UI playground in `/ui-playground` en richtlijnen in `docs/ui-guidelines.md`.
+
+### Hoe verder
+- Breid componenten uit (modals/drawers) voor specifieke flows.
+- Voer Lighthouse/a11y checks uit op de belangrijkste routes.
+
 ### Troubleshooting Supabase opslaan
 - Controleer dat `SUPABASE_SERVICE_ROLE_KEY` is ingesteld in Vercel en lokaal (de server gebruikt deze key voor inserts).
 - Zorg dat de migraties zijn uitgevoerd zodat kolommen overeenkomen met de payload.

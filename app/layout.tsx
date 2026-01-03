@@ -1,5 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import SiteHeader from '@/components/layout/SiteHeader';
+import SiteFooter from '@/components/layout/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'InfraImpact EPD Database',
@@ -9,14 +11,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl">
-      <body className="min-h-screen bg-slate-50 text-slate-900">
-        <header className="border-b bg-white shadow-sm">
-          <div className="mx-auto max-w-5xl px-4 py-4">
-            <h1 className="text-xl font-semibold">InfraImpact EPD Database</h1>
-            <p className="text-sm text-slate-600">Upload, review en exporteer EPD&apos;s.</p>
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+        <SiteHeader />
+        <main className="mx-auto w-full max-w-6xl px-6 py-10">{children}</main>
+        <SiteFooter />
       </body>
     </html>
   );
