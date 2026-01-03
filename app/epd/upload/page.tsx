@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
 import {
   Alert,
@@ -21,6 +22,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from '@/components/ui';
+import { buttonStyles } from '@/components/ui/button';
 import {
   ALL_INDICATOR_CODES,
   IMPACT_INDICATORS,
@@ -366,9 +368,14 @@ export default function UploadPage() {
             <CardTitle className="mt-2">Nieuwe EPD uploaden</CardTitle>
             <CardDescription>Upload een PDF en controleer de gegevens.</CardDescription>
           </div>
-          <Button type="button" onClick={uploadFile} disabled={loading} loading={loading}>
-            PDF verwerken
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={uploadFile} disabled={loading} loading={loading}>
+              PDF verwerken
+            </Button>
+            <Link href="/epd/upload/bulk" className={buttonStyles({ variant: 'secondary' })}>
+              Meerdere uploads
+            </Link>
+          </div>
         </CardHeader>
 
         <div

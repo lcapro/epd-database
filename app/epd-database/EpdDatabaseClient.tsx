@@ -212,6 +212,9 @@ export default function EpdDatabaseClient() {
             <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
               Nieuwe EPD uploaden
             </Link>
+            <Link href="/epd/upload/bulk" className={buttonStyles({ variant: 'secondary' })}>
+              Bulk upload
+            </Link>
             <a href={exportUrl} className={buttonStyles({})}>
               Exporteer naar Excel
             </a>
@@ -365,7 +368,9 @@ export default function EpdDatabaseClient() {
           title="Geen resultaten"
           description="Pas filters aan of upload je eerste EPD."
           actionLabel="Nieuwe upload"
+          secondaryActionLabel="Bulk upload"
           onAction={() => router.push('/epd/upload')}
+          onSecondaryAction={() => router.push('/epd/upload/bulk')}
         />
       )}
 
