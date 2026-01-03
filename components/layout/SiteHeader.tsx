@@ -1,9 +1,12 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/classNames';
 import { buttonStyles } from '@/components/ui/button';
+import logoFull from '@/assets/infra_impact.png';
+import logoIcon from '@/assets/infra_impact-icoon.png';
 
 const navItems = [
   { href: '/', label: 'Overzicht' },
@@ -17,15 +20,23 @@ export default function SiteHeader() {
   return (
     <header className="border-b border-gray-100 bg-white/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-600 text-white font-semibold">
-            II
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900">InfraImpact</p>
-            <p className="text-xs text-gray-500">EPD Database</p>
-          </div>
-        </div>
+        <Link href="/" className="flex items-center gap-3" aria-label="Naar overzicht">
+          <Image
+            src={logoIcon}
+            alt="InfraImpact logo"
+            width={40}
+            height={40}
+            className="h-10 w-10 md:hidden"
+            priority
+          />
+          <Image
+            src={logoFull}
+            alt="InfraImpact"
+            height={40}
+            className="hidden h-10 w-auto md:block"
+            priority
+          />
+        </Link>
         <nav className="hidden items-center gap-6 text-sm font-medium text-gray-600 md:flex">
           {navItems.map((item) => {
             const active = pathname === item.href || pathname?.startsWith(`${item.href}/`);
