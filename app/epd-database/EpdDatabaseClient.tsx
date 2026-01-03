@@ -136,7 +136,7 @@ export default function EpdDatabaseClient() {
         if (!params.get('pageSize')) params.set('pageSize', '25');
         if (!params.get('sort')) params.set('sort', defaultSortParams.sort);
         if (!params.get('order')) params.set('order', defaultSortParams.order);
-        const res = await fetch(`/api/epd/list?${params.toString()}`);
+        const res = await fetch(`/api/epd/list?${params.toString()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Fout bij laden');
         const json = (await res.json()) as ListResponse;
         setData(json);
@@ -152,7 +152,7 @@ export default function EpdDatabaseClient() {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const res = await fetch('/api/epd/filters');
+        const res = await fetch('/api/epd/filters', { cache: 'no-store' });
         if (!res.ok) return;
         const json = (await res.json()) as FilterOptions;
         setOptions(json);

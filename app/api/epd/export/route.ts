@@ -44,7 +44,15 @@ export async function GET(request: Request) {
   >();
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message || 'Geen data' }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message || 'Geen data' },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   }
 
   const withImpacts: DatabaseExportWithImpacts[] = data.map((epd) => ({
@@ -58,6 +66,7 @@ export async function GET(request: Request) {
     return new NextResponse(csv, {
       status: 200,
       headers: {
+        'Cache-Control': 'no-store, max-age=0',
         'Content-Type': 'text/csv',
         'Content-Disposition': 'attachment; filename="epds.csv"',
       },
@@ -68,6 +77,7 @@ export async function GET(request: Request) {
   return new NextResponse(buffer, {
     status: 200,
     headers: {
+      'Cache-Control': 'no-store, max-age=0',
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="epds.xlsx"',
     },
