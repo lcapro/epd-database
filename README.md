@@ -76,6 +76,9 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Zorg dat de migraties zijn uitgevoerd zodat kolommen overeenkomen met de payload.
 - Kijk in de server logs voor een requestId en Supabase error code zonder secrets.
 
+### Troubleshooting Vercel server-side fetches
+- Server-side fetches naar `/api/...` moeten een absolute URL gebruiken (bijv. via `absoluteUrl()` uit `lib/absoluteUrl.ts`) om `Failed to parse URL from /api/...` te voorkomen.
+
 ## How to add a new EPD format parser
 1. Voeg een nieuwe parser toe in `lib/epd/parsers/` (bijv. `myFormat.ts`).
 2. Exporteer een parser object met:
