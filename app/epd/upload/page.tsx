@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
 import {
   Alert,
@@ -46,6 +46,7 @@ export default function UploadPage() {
   const router = useRouter();
 
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedEpd | null>(null);
   const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
@@ -116,6 +117,18 @@ export default function UploadPage() {
     const dropped = event.dataTransfer.files?.[0];
     if (dropped) setFile(dropped);
   };
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   // Laad parser-output in formulier + impact state
   const loadParsedIntoForm = (data: ParsedEpd) => {
@@ -371,6 +384,11 @@ export default function UploadPage() {
             className="mt-3 text-sm"
           />
           {file && <p className="mt-2 text-sm text-gray-700">Geselecteerd: {file.name}</p>}
+          {previewUrl && (
+            <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <iframe title="PDF preview" src={previewUrl} className="h-72 w-full" />
+            </div>
+          )}
         </div>
 
         {parsedInfo}
