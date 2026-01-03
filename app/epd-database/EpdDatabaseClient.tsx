@@ -196,12 +196,17 @@ export default function EpdDatabaseClient() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="relative overflow-hidden border-brand-100/70 bg-white/85 shadow-soft backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-accent-500 to-brand-500" />
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <Badge variant="brand">Database</Badge>
-            <CardTitle className="mt-2">EPD database</CardTitle>
-            <CardDescription>Filter en exporteer EPD&apos;s.</CardDescription>
+            <CardTitle className="mt-2 bg-gradient-to-r from-brand-700 to-accent-700 bg-clip-text text-transparent">
+              EPD database
+            </CardTitle>
+            <CardDescription>
+              Filter, vergelijk en exporteer EPD&apos;s met dezelfde uitstraling als infraimpact.nl.
+            </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
@@ -295,7 +300,7 @@ export default function EpdDatabaseClient() {
       {loading && <Alert variant="info">Laden...</Alert>}
 
       {data && data.items.length > 0 && (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border-brand-100/60 bg-white/90 shadow-soft">
           <div className="overflow-x-auto">
             <Table>
               <TableHead>
