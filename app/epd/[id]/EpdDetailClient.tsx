@@ -2,6 +2,20 @@
 
 import { useMemo, useState } from 'react';
 import type { EpdImpactRecord, EpdRecord } from '@/lib/types';
+import {
+  Badge,
+  Button,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui';
 
 const STAGES = ['A1', 'A2', 'A3', 'A1-A3', 'D'] as const;
 
@@ -78,12 +92,15 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
   };
 
   return (
-    <div className="space-y-4">
-      <div className="card space-y-2">
-        <h2 className="text-lg font-semibold">{epd.product_name}</h2>
-        <p className="text-sm text-slate-600">{epd.functional_unit}</p>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="space-y-2">
+          <Badge variant="brand">EPD detail</Badge>
+          <CardTitle>{epd.product_name}</CardTitle>
+          <CardDescription>{epd.functional_unit}</CardDescription>
+        </CardHeader>
 
-        <div className="grid-two mt-2 text-sm">
+        <div className="mt-4 grid gap-3 text-sm text-gray-700 md:grid-cols-2 lg:grid-cols-3">
           <div><strong>Producent:</strong> {epd.producer_name || '-'}</div>
           <div><strong>LCA-methode:</strong> {epd.lca_method || '-'}</div>
           <div><strong>PCR-versie:</strong> {epd.pcr_version || '-'}</div>
@@ -97,10 +114,10 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
         </div>
 
         {!!epd.storage_path && supabaseUrl && (
-          <div className="pt-2 text-sm">
-            <p className="text-slate-500">Originele PDF</p>
+          <div className="mt-4 text-sm">
+            <p className="text-gray-500">Originele PDF</p>
             <a
-              className="text-sky-600 underline"
+              className="font-semibold text-brand-700 hover:text-brand-800"
               href={`${supabaseUrl}/storage/v1/object/public/${bucket}/${epd.storage_path}`}
               target="_blank"
               rel="noreferrer"
@@ -109,72 +126,76 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
             </a>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="card space-y-3">
-        <div className="flex-between">
-          <h3 className="font-semibold">Impactwaarden</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Impactwaarden</CardTitle>
+          <CardDescription>Kies de categorieën die je wilt zien.</CardDescription>
+        </CardHeader>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {indicatorOptions.map((ind) => {
+            const active = visibleIndicators.includes(ind);
+            return (
+              <Button
+                key={ind}
+                type="button"
+                variant={active ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => toggleIndicator(ind)}
+              >
+                {ind}
+              </Button>
+            );
+          })}
         </div>
 
-        <div className="space-y-2">
-          <p className="text-sm text-slate-600">Kies welke categorieën zichtbaar zijn:</p>
-          <div className="flex flex-wrap gap-2">
-            {indicatorOptions.map((ind) => {
-              const active = visibleIndicators.includes(ind);
-              return (
-                <button
-                  key={ind}
-                  type="button"
-                  className={`button ${active ? 'button-primary' : 'button-secondary'}`}
-                  onClick={() => toggleIndicator(ind)}
-                >
-                  {ind}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-6 pt-2">
+        <div className="mt-6 space-y-6">
           {visibleIndicators.map((indicator) => (
-            <div key={indicator} className="space-y-2">
-              <h4 className="font-semibold">{indicator}</h4>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Set</th>
-                    {STAGES.map((stage) => (
-                      <th key={stage}>{stage.replace('_', '-')}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SETS.map((setType) => (
-                    <tr key={`${indicator}-${setType}`}>
-                      <td>{setType}</td>
+            <div key={indicator} className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-800">{indicator}</h4>
+              <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableHeaderCell>Set</TableHeaderCell>
                       {STAGES.map((stage) => (
-                        <td key={`${indicator}-${setType}-${stage}`}>
-                          {findImpact(indicator, setType, stage)}
-                        </td>
+                        <TableHeaderCell key={stage}>{stage.replace('_', '-')}</TableHeaderCell>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="text-xs text-slate-500">
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {SETS.map((setType) => (
+                      <TableRow key={`${indicator}-${setType}`}>
+                        <TableCell>{setType}</TableCell>
+                        {STAGES.map((stage) => (
+                          <TableCell key={`${indicator}-${setType}-${stage}`}>
+                            {findImpact(indicator, setType, stage)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-xs text-gray-500">
                 Tip: als een waarde “-” is, staat hij niet in de DB voor deze indicator/set/stage.
               </p>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="card space-y-2">
-        <h3 className="font-semibold">Custom velden</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Custom velden</CardTitle>
+          <CardDescription>Extra metadata.</CardDescription>
+        </CardHeader>
         {Object.keys(epd.custom_attributes || {}).length === 0 ? (
-          <p className="text-sm text-slate-600">Geen extra velden.</p>
+          <p className="mt-4 text-sm text-gray-600">Geen extra velden.</p>
         ) : (
-          <ul className="list-disc pl-5 text-sm">
+          <ul className="mt-4 list-disc pl-5 text-sm text-gray-700">
             {Object.entries(epd.custom_attributes).map(([key, value]) => (
               <li key={key}>
                 <strong>{key}:</strong> {value}
@@ -182,7 +203,7 @@ export default function EpdDetailClient({ epd, impacts, supabaseUrl, bucket }: P
             ))}
           </ul>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

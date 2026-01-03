@@ -3,6 +3,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  FormField,
+  Input,
+  Pagination,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui';
+import { buttonStyles } from '@/components/ui/button';
 
 type EpdListItem = {
   id: string;
@@ -174,204 +195,184 @@ export default function EpdDatabaseClient() {
   }, [searchParams, defaultSortParams]);
 
   return (
-    <div className="card space-y-4">
-      <div className="flex-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">EPD database</h2>
-          <p className="text-sm text-slate-600">Filter en exporteer opgeslagen EPD&apos;s.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/epd/upload" className="button button-secondary">
-            Nieuwe EPD uploaden
-          </Link>
-          <a href={exportUrl} className="button button-primary">
-            Exporteer naar Excel
-          </a>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <Badge variant="brand">Database</Badge>
+            <CardTitle className="mt-2">EPD database</CardTitle>
+            <CardDescription>Filter en exporteer EPD&apos;s.</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
+              Nieuwe EPD uploaden
+            </Link>
+            <a href={exportUrl} className={buttonStyles({})}>
+              Exporteer naar Excel
+            </a>
+          </div>
+        </CardHeader>
 
-      <div className="grid-two gap-3">
-        <label className="space-y-1">
-          <span className="text-sm">Zoek (product/producent)</span>
-          <input
-            className="input"
-            value={filters.q}
-            onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
-            placeholder="Zoekterm"
-          />
-        </label>
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <FormField label="Zoek (product/producent)">
+            <Input
+              value={filters.q}
+              onChange={(e) => setFilters((prev) => ({ ...prev, q: e.target.value }))}
+              placeholder="Zoekterm"
+            />
+          </FormField>
 
-        <label className="space-y-1">
-          <span className="text-sm">Bepalingsmethode versie</span>
-          <select
-            className="select"
-            value={filters.determinationMethodVersion}
-            onChange={(e) => setFilters((prev) => ({ ...prev, determinationMethodVersion: e.target.value }))}
-          >
-            <option value="">Alle</option>
-            {options?.determinationMethodVersions.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-sm">PCR versie</span>
-          <select
-            className="select"
-            value={filters.pcrVersion}
-            onChange={(e) => setFilters((prev) => ({ ...prev, pcrVersion: e.target.value }))}
-          >
-            <option value="">Alle</option>
-            {options?.pcrVersions.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-sm">Databaseversie</span>
-          <select
-            className="select"
-            value={filters.databaseVersion}
-            onChange={(e) => setFilters((prev) => ({ ...prev, databaseVersion: e.target.value }))}
-          >
-            <option value="">Alle</option>
-            {options?.databaseVersions.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-sm">Producent</span>
-          <select
-            className="select"
-            value={filters.producerName}
-            onChange={(e) => setFilters((prev) => ({ ...prev, producerName: e.target.value }))}
-          >
-            <option value="">Alle</option>
-            {options?.producers.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-sm">Productgroep/categorie</span>
-          <select
-            className="select"
-            value={filters.productCategory}
-            onChange={(e) => setFilters((prev) => ({ ...prev, productCategory: e.target.value }))}
-          >
-            <option value="">Alle</option>
-            {options?.productCategories.map((value) => (
-              <option key={value} value={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="flex gap-2">
-        <button className="button button-primary" onClick={applyFilters}>
-          Filters toepassen
-        </button>
-        <button className="button button-secondary" onClick={resetFilters}>
-          Reset filters
-        </button>
-      </div>
-
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-      {loading && <div className="text-sm text-slate-600">Laden...</div>}
-
-      {data && (
-        <div className="overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('product_name')}>
-                    Productnaam
-                  </button>
-                </th>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('producer_name')}>
-                    Producent
-                  </button>
-                </th>
-                <th>Functionele eenheid</th>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('mki_a1a3')}>
-                    MKI A1-A3
-                  </button>
-                </th>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('mki_d')}>
-                    MKI D
-                  </button>
-                </th>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('co2_a1a3')}>
-                    CO2 A1-A3
-                  </button>
-                </th>
-                <th>
-                  <button type="button" className="underline" onClick={() => toggleSort('co2_d')}>
-                    CO2 D
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((epd) => (
-                <tr key={epd.id}>
-                  <td>
-                    <Link href={`/epd/${epd.id}`} className="text-sky-600 underline">
-                      {epd.product_name}
-                    </Link>
-                  </td>
-                  <td>{epd.producer_name || '-'}</td>
-                  <td>{epd.functional_unit}</td>
-                  <td>{formatNumber(epd.mki_a1a3)}</td>
-                  <td>{formatNumber(epd.mki_d)}</td>
-                  <td>{formatNumber(epd.co2_a1a3)}</td>
-                  <td>{formatNumber(epd.co2_d)}</td>
-                </tr>
+          <FormField label="Bepalingsmethode versie">
+            <Select
+              value={filters.determinationMethodVersion}
+              onChange={(e) => setFilters((prev) => ({ ...prev, determinationMethodVersion: e.target.value }))}
+            >
+              <option value="">Alle</option>
+              {options?.determinationMethodVersions.map((value) => (
+                <option key={value} value={value}>{value}</option>
               ))}
-            </tbody>
-          </table>
+            </Select>
+          </FormField>
+
+          <FormField label="PCR versie">
+            <Select
+              value={filters.pcrVersion}
+              onChange={(e) => setFilters((prev) => ({ ...prev, pcrVersion: e.target.value }))}
+            >
+              <option value="">Alle</option>
+              {options?.pcrVersions.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField label="Databaseversie">
+            <Select
+              value={filters.databaseVersion}
+              onChange={(e) => setFilters((prev) => ({ ...prev, databaseVersion: e.target.value }))}
+            >
+              <option value="">Alle</option>
+              {options?.databaseVersions.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField label="Producent">
+            <Select
+              value={filters.producerName}
+              onChange={(e) => setFilters((prev) => ({ ...prev, producerName: e.target.value }))}
+            >
+              <option value="">Alle</option>
+              {options?.producers.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField label="Productgroep/categorie">
+            <Select
+              value={filters.productCategory}
+              onChange={(e) => setFilters((prev) => ({ ...prev, productCategory: e.target.value }))}
+            >
+              <option value="">Alle</option>
+              {options?.productCategories.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </Select>
+          </FormField>
         </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button onClick={applyFilters}>Filters toepassen</Button>
+          <Button variant="secondary" onClick={resetFilters}>
+            Reset filters
+          </Button>
+        </div>
+      </Card>
+
+      {error && <Alert variant="danger">{error}</Alert>}
+      {loading && <Alert variant="info">Laden...</Alert>}
+
+      {data && data.items.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('product_name')}>
+                      Productnaam
+                    </button>
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('producer_name')}>
+                      Producent
+                    </button>
+                  </TableHeaderCell>
+                  <TableHeaderCell>Functionele eenheid</TableHeaderCell>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('mki_a1a3')}>
+                      MKI A1-A3
+                    </button>
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('mki_d')}>
+                      MKI D
+                    </button>
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('co2_a1a3')}>
+                      CO2 A1-A3
+                    </button>
+                  </TableHeaderCell>
+                  <TableHeaderCell>
+                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('co2_d')}>
+                      CO2 D
+                    </button>
+                  </TableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.items.map((epd) => (
+                  <TableRow key={epd.id}>
+                    <TableCell>
+                      <Link href={`/epd/${epd.id}`} className="font-semibold text-brand-700 hover:text-brand-800">
+                        {epd.product_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{epd.producer_name || '-'}</TableCell>
+                    <TableCell>{epd.functional_unit}</TableCell>
+                    <TableCell>{formatNumber(epd.mki_a1a3)}</TableCell>
+                    <TableCell>{formatNumber(epd.mki_d)}</TableCell>
+                    <TableCell>{formatNumber(epd.co2_a1a3)}</TableCell>
+                    <TableCell>{formatNumber(epd.co2_d)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
 
-      <div className="flex-between">
-        <div className="text-sm text-slate-600">
-          Pagina {page} van {totalPages}
-        </div>
-        <div className="flex gap-2">
-          <button
-            className="button button-secondary"
-            onClick={() => {
-              const params = new URLSearchParams(searchParams.toString());
-              params.set('page', Math.max(1, page - 1).toString());
-              router.push(`/epd-database?${params.toString()}`);
-            }}
-            disabled={page <= 1}
-          >
-            Vorige
-          </button>
-          <button
-            className="button button-secondary"
-            onClick={() => {
-              const params = new URLSearchParams(searchParams.toString());
-              params.set('page', Math.min(totalPages, page + 1).toString());
-              router.push(`/epd-database?${params.toString()}`);
-            }}
-            disabled={page >= totalPages}
-          >
-            Volgende
-          </button>
-        </div>
-      </div>
+      {data && data.items.length === 0 && (
+        <EmptyState
+          title="Geen resultaten"
+          description="Pas filters aan of upload je eerste EPD."
+          actionLabel="Nieuwe upload"
+          onAction={() => router.push('/epd/upload')}
+        />
+      )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={(nextPage) => {
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('page', nextPage.toString());
+          router.push(`/epd-database?${params.toString()}`);
+        }}
+      />
     </div>
   );
 }
