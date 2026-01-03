@@ -8,7 +8,6 @@ import { buttonStyles } from '@/components/ui/button';
 const navItems = [
   { href: '/', label: 'Overzicht' },
   { href: '/epd-database', label: 'EPD database' },
-  { href: '/epd', label: 'EPD lijst' },
   { href: '/epd/upload', label: 'Upload' },
 ];
 

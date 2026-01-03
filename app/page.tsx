@@ -94,14 +94,14 @@ export default function HomePage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">Start vandaag met je EPD&apos;s</h2>
-            <p className="mt-2 text-sm text-gray-600">Upload je eerste PDF of bekijk de lijst.</p>
+            <p className="mt-2 text-sm text-gray-600">Upload je eerste PDF of bekijk de database.</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/epd/upload" className={buttonStyles({})}>
               Start
             </Link>
-            <Link href="/epd" className={buttonStyles({ variant: 'secondary' })}>
-              Bekijk lijst
+            <Link href="/epd-database" className={buttonStyles({ variant: 'secondary' })}>
+              Bekijk database
             </Link>
           </div>
         </div>

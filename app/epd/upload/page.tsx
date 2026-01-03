@@ -569,7 +569,7 @@ export default function UploadPage() {
         <Button type="submit" disabled={loading} loading={loading}>
           Opslaan in database
         </Button>
-        <Button type="button" variant="secondary" onClick={() => router.push('/epd')}>
+        <Button type="button" variant="secondary" onClick={() => router.push('/epd-database')}>
           Annuleren
         </Button>
       </div>
