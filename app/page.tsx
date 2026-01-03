@@ -27,19 +27,19 @@ export default function HomePage() {
           <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-600" />
-              Automatische parsing
+              Automatisch ingelezen
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-600" />
-              Duidelijke exports
+              Overzichtelijke exports
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-600" />
-              Consistente data
+              Altijd dezelfde data
             </div>
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-600" />
-              B2B-ready
+              Klaar voor bedrijven
             </div>
           </div>
         </div>
