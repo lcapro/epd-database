@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
-import { getAdminClient } from '@/lib/supabaseClient';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getActiveOrgIdFromRequest } from '@/lib/organizations';
 import { parseEpd } from '@/lib/epdParser';
 
 export const runtime = 'nodejs';
@@ -15,6 +17,20 @@ function sanitizePdfText(text: string): string {
 
 export async function POST(request: Request) {
   try {
+    const supabase = createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    }
+
+    const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+    if (!activeOrgId) {
+      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
 
@@ -28,11 +44,10 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const filename = (file as File).name || 'upload.pdf';
-    const adminClient = getAdminClient();
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'epd-pdfs';
     const path = `epd/${uuidv4()}-${filename}`;
 
-    const { error: uploadError } = await adminClient.storage.from(bucket).upload(path, buffer, {
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, buffer, {
       contentType: 'application/pdf',
       upsert: false,
     });
@@ -54,7 +69,7 @@ export async function POST(request: Request) {
       parseError = err instanceof Error ? err.message : 'Onbekende fout bij het lezen van de PDF-tekst';
     }
 
-    const { data, error } = await adminClient
+    const { data, error } = await supabase
       .from('epd_files')
       .insert({ storage_path: path, original_filename: filename, raw_text: parsedPdfText })
       .select('id')
@@ -65,7 +80,7 @@ export async function POST(request: Request) {
 
     if (insertError && insertError.message?.toLowerCase().includes('unsupported unicode escape')) {
       console.warn('Kon raw_text niet opslaan door Unicode-fout, probeer zonder tekst', insertError);
-      const retry = await adminClient
+      const retry = await supabase
         .from('epd_files')
         .insert({ storage_path: path, original_filename: filename, raw_text: '' })
         .select('id')

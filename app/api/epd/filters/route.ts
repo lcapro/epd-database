@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getActiveOrgIdFromRequest } from '@/lib/organizations';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,10 +20,15 @@ function uniq(values: (string | null)[]) {
   );
 }
 
-async function fetchColumnValues(admin: ReturnType<typeof getAdminClient>, column: string) {
-  const { data, error } = await admin
+async function fetchColumnValues(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  column: string,
+  organizationId: string,
+) {
+  const { data, error } = await supabase
     .from('epds')
     .select(column)
+    .eq('organization_id', organizationId)
     .not(column, 'is', null)
     .order(column, { ascending: true })
     .limit(500)
@@ -33,8 +40,20 @@ async function fetchColumnValues(admin: ReturnType<typeof getAdminClient>, colum
   return data.map((row) => row[column] ?? null);
 }
 
-export async function GET() {
-  const admin = getAdminClient();
+export async function GET(request: Request) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+  }
+
+  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  if (!activeOrgId) {
+    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+  }
 
   const [
     determinationMethodVersions,
@@ -43,11 +62,11 @@ export async function GET() {
     producers,
     productCategories,
   ] = await Promise.all([
-    fetchColumnValues(admin, 'determination_method_version'),
-    fetchColumnValues(admin, 'pcr_version'),
-    fetchColumnValues(admin, 'database_version'),
-    fetchColumnValues(admin, 'producer_name'),
-    fetchColumnValues(admin, 'product_category'),
+    fetchColumnValues(supabase, 'determination_method_version', activeOrgId),
+    fetchColumnValues(supabase, 'pcr_version', activeOrgId),
+    fetchColumnValues(supabase, 'database_version', activeOrgId),
+    fetchColumnValues(supabase, 'producer_name', activeOrgId),
+    fetchColumnValues(supabase, 'product_category', activeOrgId),
   ]);
 
   const payload: FilterOptions = {

@@ -8,6 +8,8 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Automatische parsing van kernvelden en MKI/CO2-waarden
 - Handmatige review en aanvullende custom velden
 - Opslag in Supabase Postgres (epd_files, epds, epd_impacts)
+- Supabase Auth (email login) + organisaties met rollen
+- Multi-tenant data scheiding via `organization_id` + RLS
 - Overzichtspagina met zoeken en paginatie
 - Detailpagina met alle impactwaarden en downloadlink naar PDF
 - Export naar Excel of CSV
@@ -33,14 +35,15 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 3. Zorg dat de volgende variabelen zijn gezet (in `.env.local` en Vercel):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPABASE_STORAGE_BUCKET` (en `NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET`) – standaard `epd-pdfs`
    - `NEXT_PUBLIC_BASE_PATH` (optioneel, voor deployment onder subpad)
+   - `SUPABASE_SERVICE_ROLE_KEY` (optioneel, alleen voor expliciete admin-taken)
 4. Voer de migraties uit in Supabase (SQL editor):
    ```sql
    -- supabase/migrations/001_init.sql
    -- supabase/migrations/002_add_unit_to_epd_impacts.sql
    -- supabase/migrations/003_epd_database_fields.sql
+   -- supabase/migrations/004_organizations.sql
    ```
 5. Start de ontwikkelserver:
    ```bash
@@ -62,6 +65,12 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Filters worden via query parameters gedeeld (bijv. `?producerName=...&pcrVersion=...`).
 - Export respecteert de actuele filters en sortering.
 
+## Auth & organisaties
+- Login/registratie via `/login` (email + wachtwoord of magic link).
+- Organisaties worden beheerd via `/org` en `/org/[orgId]/team`.
+- Actieve organisatie wordt opgeslagen in een httpOnly cookie (`active_org_id`) en bepaalt alle EPD-queries.
+- Schakel van organisatie via de selector in de topbar of via `/org`.
+
 ## UI redesign (InfraImpact look & feel)
 - Nieuwe design tokens en UI-kit componenten in `components/ui/`.
 - Layout met enterprise header/footer en ruimere content container.
@@ -72,8 +81,8 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Voer Lighthouse/a11y checks uit op de belangrijkste routes.
 
 ### Troubleshooting Supabase opslaan
-- Controleer dat `SUPABASE_SERVICE_ROLE_KEY` is ingesteld in Vercel en lokaal (de server gebruikt deze key voor inserts).
 - Zorg dat de migraties zijn uitgevoerd zodat kolommen overeenkomen met de payload.
+- Controleer dat RLS policies actief zijn voor `organizations`, `organization_members`, `epds` en `epd_impacts`.
 - Kijk in de server logs voor een requestId en Supabase error code zonder secrets.
 
 ### Troubleshooting Vercel server-side fetches
