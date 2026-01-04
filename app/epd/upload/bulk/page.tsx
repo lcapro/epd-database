@@ -161,7 +161,6 @@ export default function BulkUploadPage() {
           expirationDate: parsed.expirationDate,
           verifierName: parsed.verifierName,
           standardSet: parsed.standardSet,
-          customAttributes: parsed.customAttributes,
           impacts: parsed.impacts,
         }),
       });
