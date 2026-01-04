@@ -67,6 +67,10 @@ type SortKey =
   | 'co2_a1a3'
   | 'co2_d';
 
+type ActiveOrgResponse = {
+  organizationId: string | null;
+};
+
 const defaultFilters = {
   q: '',
   determinationMethodVersion: '',
@@ -116,6 +120,8 @@ export default function EpdDatabaseClient() {
   const [options, setOptions] = useState<FilterOptions | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  const [activeOrgChecked, setActiveOrgChecked] = useState(false);
 
   const page = Number(searchParams.get('page') || '1');
   const sort = (searchParams.get('sort') as SortKey | null) ?? 'updated_at';
@@ -123,10 +129,32 @@ export default function EpdDatabaseClient() {
   const defaultSortParams = useMemo(() => ({ sort, order }), [sort, order]);
 
   useEffect(() => {
+    const loadActiveOrg = async () => {
+      try {
+        const res = await fetch('/api/org/active', { cache: 'no-store' });
+        if (res.ok) {
+          const json = (await res.json()) as ActiveOrgResponse;
+          setActiveOrgId(json.organizationId ?? null);
+        }
+      } finally {
+        setActiveOrgChecked(true);
+      }
+    };
+    loadActiveOrg();
+  }, []);
+
+  useEffect(() => {
     setFilters(parseFilters(searchParams));
   }, [searchParams]);
 
   useEffect(() => {
+    if (!activeOrgChecked || !activeOrgId) {
+      setData(null);
+      setOptions(null);
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
@@ -147,9 +175,14 @@ export default function EpdDatabaseClient() {
       }
     };
     fetchData();
-  }, [searchParams, page, defaultSortParams]);
+  }, [searchParams, page, defaultSortParams, activeOrgChecked, activeOrgId]);
 
   useEffect(() => {
+    if (!activeOrgChecked || !activeOrgId) {
+      setOptions(null);
+      return;
+    }
+
     const fetchOptions = async () => {
       try {
         const res = await fetch('/api/epd/filters', { cache: 'no-store' });
@@ -161,7 +194,7 @@ export default function EpdDatabaseClient() {
       }
     };
     fetchOptions();
-  }, []);
+  }, [activeOrgChecked, activeOrgId]);
 
   const totalPages = useMemo(() => {
     if (!data) return 1;
@@ -193,6 +226,27 @@ export default function EpdDatabaseClient() {
     params.set('format', 'excel');
     return `/api/epd/export?${params.toString()}`;
   }, [searchParams, defaultSortParams]);
+
+  if (activeOrgChecked && !activeOrgId) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-brand-100/70 bg-white/85 shadow-soft">
+          <CardHeader>
+            <Badge variant="brand">EPD database</Badge>
+            <CardTitle className="mt-2">Kies een organisatie</CardTitle>
+            <CardDescription>
+              Selecteer een actieve organisatie om de EPD database te bekijken en te beheren.
+            </CardDescription>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            <Link href="/org" className={buttonStyles({})}>
+              Kies organisatie
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -278,7 +332,7 @@ export default function EpdDatabaseClient() {
             </Select>
           </FormField>
 
-          <FormField label="Productgroep/categorie">
+          <FormField label="Productcategorie">
             <Select
               value={filters.productCategory}
               onChange={(e) => setFilters((prev) => ({ ...prev, productCategory: e.target.value }))}
@@ -292,53 +346,38 @@ export default function EpdDatabaseClient() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button onClick={applyFilters}>Filters toepassen</Button>
-          <Button variant="secondary" onClick={resetFilters}>
-            Reset filters
-          </Button>
+          <Button onClick={applyFilters}>Filteren</Button>
+          <Button variant="secondary" onClick={resetFilters}>Reset</Button>
         </div>
-      </Card>
 
-      {error && <Alert variant="danger">{error}</Alert>}
-      {loading && <Alert variant="info">Laden...</Alert>}
+        {error && <Alert variant="danger" className="mt-6">{error}</Alert>}
 
-      {data && data.items.length > 0 && (
-        <Card className="overflow-hidden border-brand-100/60 bg-white/90 shadow-soft">
-          <div className="overflow-x-auto">
+        {loading && <p className="mt-6 text-sm text-gray-600">Laden...</p>}
+
+        {!loading && data && data.items.length === 0 && (
+          <EmptyState
+            title="Geen resultaten"
+            description="Er zijn nog geen EPD's toegevoegd. Upload een EPD om te starten."
+            actionLabel="Nieuwe EPD uploaden"
+            onAction={() => router.push('/epd/upload')}
+            secondaryActionLabel="Bulk upload"
+            onSecondaryAction={() => router.push('/epd/upload/bulk')}
+          />
+        )}
+
+        {!loading && data && data.items.length > 0 && (
+          <div className="mt-6 overflow-x-auto">
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('product_name')}>
-                      Productnaam
-                    </button>
-                  </TableHeaderCell>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('producer_name')}>
-                      Producent
-                    </button>
-                  </TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('product_name')}>Product</TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('producer_name')}>Producent</TableHeaderCell>
                   <TableHeaderCell>Functionele eenheid</TableHeaderCell>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('mki_a1a3')}>
-                      MKI A1-A3
-                    </button>
-                  </TableHeaderCell>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('mki_d')}>
-                      MKI D
-                    </button>
-                  </TableHeaderCell>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('co2_a1a3')}>
-                      CO2 A1-A3
-                    </button>
-                  </TableHeaderCell>
-                  <TableHeaderCell>
-                    <button type="button" className="text-left font-semibold" onClick={() => toggleSort('co2_d')}>
-                      CO2 D
-                    </button>
-                  </TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('mki_a1a3')}>MKI A1-A3</TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('mki_d')}>MKI D</TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('co2_a1a3')}>CO₂ A1-A3</TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('co2_d')}>CO₂ D</TableHeaderCell>
+                  <TableHeaderCell onClick={() => toggleSort('created_at')}>Toegevoegd</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -355,34 +394,25 @@ export default function EpdDatabaseClient() {
                     <TableCell>{formatNumber(epd.mki_d)}</TableCell>
                     <TableCell>{formatNumber(epd.co2_a1a3)}</TableCell>
                     <TableCell>{formatNumber(epd.co2_d)}</TableCell>
+                    <TableCell>{epd.created_at ? new Date(epd.created_at).toLocaleDateString('nl-NL') : '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+
+            <Pagination
+              className="mt-6"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={(nextPage) => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set('page', String(nextPage));
+                router.push(`/epd-database?${params.toString()}`);
+              }}
+            />
           </div>
-        </Card>
-      )}
-
-      {data && data.items.length === 0 && (
-        <EmptyState
-          title="Geen resultaten"
-          description="Pas filters aan of upload je eerste EPD."
-          actionLabel="Nieuwe upload"
-          secondaryActionLabel="Bulk upload"
-          onAction={() => router.push('/epd/upload')}
-          onSecondaryAction={() => router.push('/epd/upload/bulk')}
-        />
-      )}
-
-      <Pagination
-        page={page}
-        totalPages={totalPages}
-        onPageChange={(nextPage) => {
-          const params = new URLSearchParams(searchParams.toString());
-          params.set('page', nextPage.toString());
-          router.push(`/epd-database?${params.toString()}`);
-        }}
-      />
+        )}
+      </Card>
     </div>
   );
 }

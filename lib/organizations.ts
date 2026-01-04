@@ -1,6 +1,7 @@
 import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
+import { ACTIVE_ORG_COOKIE } from '@/lib/activeOrg';
 
-export const ACTIVE_ORG_COOKIE = 'active_org_id';
+export { ACTIVE_ORG_COOKIE };
 
 export function getActiveOrgIdFromCookies(cookieStore: ReadonlyRequestCookies) {
   return cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;

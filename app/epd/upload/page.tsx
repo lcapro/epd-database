@@ -56,6 +56,8 @@ export default function UploadPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  const [activeOrgChecked, setActiveOrgChecked] = useState(false);
 
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
 
@@ -83,6 +85,21 @@ export default function UploadPage() {
     verifierName: '',
     standardSet: 'UNKNOWN' as EpdSetType,
   });
+
+  useEffect(() => {
+    const loadActiveOrg = async () => {
+      try {
+        const res = await fetch('/api/org/active', { cache: 'no-store' });
+        if (res.ok) {
+          const json = (await res.json()) as { organizationId: string | null };
+          setActiveOrgId(json.organizationId ?? null);
+        }
+      } finally {
+        setActiveOrgChecked(true);
+      }
+    };
+    loadActiveOrg();
+  }, []);
 
   const impactKey = (indicator: string, setType: EpdSetType, stage: EpdImpactStage) =>
     `${indicator}|${setType}|${stage}`;
@@ -277,6 +294,27 @@ export default function UploadPage() {
       setLoading(false);
     }
   };
+
+  if (activeOrgChecked && !activeOrgId) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <Badge variant="brand">EPD upload</Badge>
+            <CardTitle className="mt-2">Kies een organisatie</CardTitle>
+            <CardDescription>
+              Selecteer een actieve organisatie voordat je een EPD kunt verwerken.
+            </CardDescription>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            <Link href="/org" className={buttonStyles({})}>
+              Kies organisatie
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   // UI helpers: indicator groepen
   const groupedIndicators = useMemo(() => {
