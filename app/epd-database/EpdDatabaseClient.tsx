@@ -404,16 +404,6 @@ export default function EpdDatabaseClient() {
               className="mt-6"
               page={page}
               totalPages={totalPages}
-              onNext={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('page', String(page + 1));
-                router.push(`/epd-database?${params.toString()}`);
-              }}
-              onPrevious={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('page', String(page - 1));
-                router.push(`/epd-database?${params.toString()}`);
-              }}
               onPageChange={(nextPage) => {
                 const params = new URLSearchParams(searchParams.toString());
                 params.set('page', String(nextPage));
