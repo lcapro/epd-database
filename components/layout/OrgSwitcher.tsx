@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Select } from '@/components/ui';
 
 type Organization = {
@@ -17,51 +16,58 @@ type Membership = {
   role: string;
 };
 
+type OrgListResponse = {
+  items: Membership[];
+};
+
+type ActiveOrgResponse = {
+  organizationId: string | null;
+};
+
 export default function OrgSwitcher() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string>('');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createSupabaseBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
+      try {
+        const [orgRes, activeRes] = await Promise.all([
+          fetch('/api/org/list', { cache: 'no-store' }),
+          fetch('/api/org/active', { cache: 'no-store' }),
+        ]);
 
-      const { data } = await supabase
-        .from('organization_members')
-        .select('role, organization:organizations(id, name, slug)')
-        .order('created_at', { ascending: false });
-      const memberships = (data || []) as Membership[];
-      const orgList = memberships
-        .map((membership) => membership.organization)
-        .filter((org): org is Organization => Boolean(org));
-      setOrgs(orgList);
+        if (orgRes.ok) {
+          const json = (await orgRes.json()) as OrgListResponse;
+          const orgList = (json.items || [])
+            .map((membership) => membership.organization)
+            .filter((org): org is Organization => Boolean(org));
+          setOrgs(orgList);
+        }
 
-      const res = await fetch('/api/org/active', { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        setActiveOrgId(json?.organization?.id ?? '');
+        if (activeRes.ok) {
+          const json = (await activeRes.json()) as ActiveOrgResponse;
+          setActiveOrgId(json.organizationId ?? '');
+        }
+      } finally {
+        setReady(true);
       }
     };
     load();
   }, []);
-
-  if (!userId) return null;
 
   const handleSwitch = async (orgId: string) => {
     setActiveOrgId(orgId);
     await fetch('/api/org/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orgId }),
+      body: JSON.stringify({ organizationId: orgId }),
     });
     router.refresh();
   };
+
+  if (!ready) return null;
 
   if (!orgs.length) {
     return (

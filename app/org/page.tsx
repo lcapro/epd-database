@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 
@@ -20,6 +19,14 @@ type Membership = {
 
 type MembershipWithOrg = Membership & { organization: Organization };
 
+type OrgListResponse = {
+  items: Membership[];
+};
+
+type ActiveOrgResponse = {
+  organizationId: string | null;
+};
+
 export default function OrgOverviewPage() {
   const router = useRouter();
   const [memberships, setMemberships] = useState<MembershipWithOrg[]>([]);
@@ -32,22 +39,24 @@ export default function OrgOverviewPage() {
       setLoading(true);
       setError(null);
       try {
-        const supabase = createSupabaseBrowserClient();
-        const { data, error: membershipError } = await supabase
-          .from('organization_members')
-          .select('role, organization:organizations(id, name, slug)')
-          .order('created_at', { ascending: false });
-        if (membershipError) throw membershipError;
-        const memberships = (data || []) as Membership[];
-        const filtered = memberships.filter(
+        const [orgRes, activeRes] = await Promise.all([
+          fetch('/api/org/list', { cache: 'no-store' }),
+          fetch('/api/org/active', { cache: 'no-store' }),
+        ]);
+
+        if (!orgRes.ok) {
+          const data = await orgRes.json().catch(() => null);
+          throw new Error(data?.error || 'Kon organisaties niet laden');
+        }
+        const orgJson = (await orgRes.json()) as OrgListResponse;
+        const filtered = (orgJson.items || []).filter(
           (membership): membership is MembershipWithOrg => Boolean(membership.organization),
         );
         setMemberships(filtered);
 
-        const activeRes = await fetch('/api/org/active', { cache: 'no-store' });
         if (activeRes.ok) {
-          const json = await activeRes.json();
-          setActiveOrgId(json?.organization?.id ?? null);
+          const json = (await activeRes.json()) as ActiveOrgResponse;
+          setActiveOrgId(json.organizationId ?? null);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kon organisaties niet laden');
@@ -62,7 +71,7 @@ export default function OrgOverviewPage() {
     await fetch('/api/org/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orgId }),
+      body: JSON.stringify({ organizationId: orgId }),
     });
     setActiveOrgId(orgId);
     router.push('/epd-database');

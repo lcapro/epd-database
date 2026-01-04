@@ -83,6 +83,7 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 ### Troubleshooting Supabase opslaan
 - Zorg dat de migraties zijn uitgevoerd zodat kolommen overeenkomen met de payload.
 - Controleer dat RLS policies actief zijn voor `organizations`, `organization_members`, `epds` en `epd_impacts`.
+- Als je een RLS fout ziet: controleer of de `active_org_id` cookie gezet is en of de user lid is van die organisatie.
 - Kijk in de server logs voor een requestId en Supabase error code zonder secrets.
 
 ### Troubleshooting Vercel server-side fetches

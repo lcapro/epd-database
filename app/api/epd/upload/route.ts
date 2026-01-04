@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getActiveOrgIdFromRequest } from '@/lib/organizations';
+import { requireActiveOrgId } from '@/lib/activeOrg';
+import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { parseEpd } from '@/lib/epdParser';
 
 export const runtime = 'nodejs';
@@ -16,6 +16,7 @@ function sanitizePdfText(text: string): string {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
     const supabase = createSupabaseServerClient();
     const {
@@ -26,9 +27,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }
 
-    const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+    let activeOrgId: string | null = null;
+    try {
+      activeOrgId = requireActiveOrgId();
+      await assertOrgMember(supabase, user.id, activeOrgId);
+    } catch (err) {
+      if (err instanceof OrgAuthError) {
+        console.warn('EPD upload forbidden', {
+          requestId,
+          userId: user.id,
+          organizationId: activeOrgId ?? null,
+          code: err.code ?? null,
+          message: err.message,
+        });
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
     if (!activeOrgId) {
-      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
     }
 
     const formData = await request.formData();
@@ -53,6 +72,13 @@ export async function POST(request: Request) {
     });
 
     if (uploadError) {
+      console.error('Supabase EPD upload failed', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        code: uploadError.code ?? null,
+        message: uploadError.message ?? null,
+      });
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
@@ -65,7 +91,12 @@ export async function POST(request: Request) {
       parsedPdfText = sanitizePdfText(parsedPdf.text || '');
       parsedEpd = parseEpd(parsedPdfText);
     } catch (err) {
-      console.error('Kon PDF-tekst niet uitlezen', err);
+      console.error('Kon PDF-tekst niet uitlezen', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        message: err instanceof Error ? err.message : 'Onbekende fout',
+      });
       parseError = err instanceof Error ? err.message : 'Onbekende fout bij het lezen van de PDF-tekst';
     }
 
@@ -90,6 +121,13 @@ export async function POST(request: Request) {
     }
 
     if (insertError || !insertData) {
+      console.error('Supabase EPD file insert failed', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        code: insertError?.code ?? null,
+        message: insertError?.message ?? null,
+      });
       return NextResponse.json({ error: insertError?.message || 'Kon bestand niet opslaan' }, { status: 500 });
     }
 
@@ -101,7 +139,10 @@ export async function POST(request: Request) {
       parseError,
     });
   } catch (err) {
-    console.error('EPD upload failed', err);
+    console.error('EPD upload failed', {
+      requestId,
+      message: err instanceof Error ? err.message : 'Onbekende fout',
+    });
     const message = err instanceof Error ? err.message : 'Onbekende fout bij uploaden';
     return NextResponse.json({ error: message }, { status: 500 });
   }

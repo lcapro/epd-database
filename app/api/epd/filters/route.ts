@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getActiveOrgIdFromRequest } from '@/lib/organizations';
+import { requireActiveOrgId } from '@/lib/activeOrg';
+import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,6 +24,8 @@ async function fetchColumnValues(
   supabase: ReturnType<typeof createSupabaseServerClient>,
   column: string,
   organizationId: string,
+  requestId: string,
+  userId: string,
 ) {
   const { data, error } = await supabase
     .from('epds')
@@ -35,12 +37,21 @@ async function fetchColumnValues(
     .returns<Record<string, string | null>[]>();
 
   if (error) {
+    console.error('Supabase EPD filter fetch failed', {
+      requestId,
+      userId,
+      organizationId,
+      column,
+      code: error.code ?? null,
+      message: error.message ?? null,
+    });
     return [];
   }
   return data.map((row) => row[column] ?? null);
 }
 
-export async function GET(request: Request) {
+export async function GET() {
+  const requestId = crypto.randomUUID();
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -50,9 +61,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
-  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  let activeOrgId: string | null = null;
+  try {
+    activeOrgId = requireActiveOrgId();
+    await assertOrgMember(supabase, user.id, activeOrgId);
+  } catch (err) {
+    if (err instanceof OrgAuthError) {
+      console.warn('EPD filters forbidden', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId ?? null,
+        code: err.code ?? null,
+        message: err.message,
+      });
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
   }
 
   const [
@@ -62,11 +91,11 @@ export async function GET(request: Request) {
     producers,
     productCategories,
   ] = await Promise.all([
-    fetchColumnValues(supabase, 'determination_method_version', activeOrgId),
-    fetchColumnValues(supabase, 'pcr_version', activeOrgId),
-    fetchColumnValues(supabase, 'database_version', activeOrgId),
-    fetchColumnValues(supabase, 'producer_name', activeOrgId),
-    fetchColumnValues(supabase, 'product_category', activeOrgId),
+    fetchColumnValues(supabase, 'determination_method_version', activeOrgId, requestId, user.id),
+    fetchColumnValues(supabase, 'pcr_version', activeOrgId, requestId, user.id),
+    fetchColumnValues(supabase, 'database_version', activeOrgId, requestId, user.id),
+    fetchColumnValues(supabase, 'producer_name', activeOrgId, requestId, user.id),
+    fetchColumnValues(supabase, 'product_category', activeOrgId, requestId, user.id),
   ]);
 
   const payload: FilterOptions = {

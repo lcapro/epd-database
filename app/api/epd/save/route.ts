@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getActiveOrgIdFromRequest } from '@/lib/organizations';
+import { getActiveOrgId } from '@/lib/activeOrg';
+import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { EpdSetType, ParsedImpact } from '@/lib/types';
 import {
   ALLOWED_SETS,
@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     standardSet,
     customAttributes,
     impacts,
+    organizationId,
   } = body as {
     fileId?: string;
     productName?: string;
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     standardSet?: string;
     customAttributes?: Record<string, string>;
     impacts?: ParsedImpact[];
+    organizationId?: string;
   };
 
   const cleanedProductName = normalizeOptionalString(productName);
@@ -88,9 +90,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
-  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  const activeOrgId = getActiveOrgId() ?? normalizeOptionalString(organizationId);
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+  }
+
+  try {
+    await assertOrgMember(supabase, user.id, activeOrgId);
+  } catch (err) {
+    if (err instanceof OrgAuthError) {
+      console.warn('EPD save forbidden', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        code: err.code ?? null,
+        message: err.message,
+      });
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    console.error('EPD save membership check failed', {
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      message: err instanceof Error ? err.message : 'Onbekende fout',
+    });
+    return NextResponse.json({ error: 'Kon lidmaatschap niet controleren' }, { status: 500 });
   }
 
   const { data: epd, error } = await supabase
@@ -155,7 +179,8 @@ export async function POST(request: Request) {
     console.error('Supabase EPD save failed', {
       requestId,
       fileId: fileId ?? null,
-      userId: null,
+      userId: user.id,
+      organizationId: activeOrgId,
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
@@ -172,6 +197,8 @@ export async function POST(request: Request) {
       console.warn('Kon bestaande impacts niet verwijderen', {
         requestId,
         epdId: epd.id,
+        userId: user.id,
+        organizationId: activeOrgId,
         code: cleanupError.code ?? null,
         message: cleanupError.message ?? null,
       });
@@ -191,6 +218,8 @@ export async function POST(request: Request) {
       console.error('Supabase impact save failed', {
         requestId,
         epdId: epd.id,
+        userId: user.id,
+        organizationId: activeOrgId,
         code: impactError.code ?? null,
         message: impactError.message ?? null,
       });
@@ -203,6 +232,8 @@ export async function POST(request: Request) {
     requestId,
     epdId: epd.id,
     fileId: fileId ?? null,
+    userId: user.id,
+    organizationId: activeOrgId,
     status,
   });
 

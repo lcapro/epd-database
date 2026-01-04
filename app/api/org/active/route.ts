@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { ACTIVE_ORG_COOKIE } from '@/lib/organizations';
+import { ACTIVE_ORG_COOKIE, ActiveOrgError, getActiveOrgId } from '@/lib/activeOrg';
+import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 
 export async function GET() {
+  const requestId = crypto.randomUUID();
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -13,22 +15,38 @@ export async function GET() {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
-  const activeOrgId = cookies().get(ACTIVE_ORG_COOKIE)?.value;
+  const activeOrgId = getActiveOrgId();
   if (!activeOrgId) {
-    return NextResponse.json({ organization: null });
+    return NextResponse.json({ organizationId: null });
   }
 
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization:organizations(id, name, slug)')
-    .eq('organization_id', activeOrgId)
-    .eq('user_id', user.id)
-    .single();
+  try {
+    await assertOrgMember(supabase, user.id, activeOrgId);
+  } catch (err) {
+    if (err instanceof OrgAuthError) {
+      console.warn('Active org membership invalid', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        code: err.code ?? null,
+        message: err.message,
+      });
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    console.error('Active org lookup failed', {
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      message: err instanceof Error ? err.message : 'Onbekende fout',
+    });
+    return NextResponse.json({ error: 'Kon actieve organisatie niet ophalen' }, { status: 500 });
+  }
 
-  return NextResponse.json({ organization: membership?.organization ?? null });
+  return NextResponse.json({ organizationId: activeOrgId });
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
@@ -39,27 +57,41 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const orgId = body?.orgId as string | undefined;
-  if (!orgId) {
-    return NextResponse.json({ error: 'orgId ontbreekt' }, { status: 400 });
+  const organizationId = body?.organizationId as string | undefined;
+  if (!organizationId) {
+    return NextResponse.json({ error: 'organizationId ontbreekt' }, { status: 400 });
   }
 
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization:organizations(id, name, slug)')
-    .eq('organization_id', orgId)
-    .eq('user_id', user.id)
-    .single();
-
-  if (!membership?.organization) {
-    return NextResponse.json({ error: 'Geen toegang tot organisatie' }, { status: 403 });
+  try {
+    await assertOrgMember(supabase, user.id, organizationId);
+  } catch (err) {
+    if (err instanceof OrgAuthError) {
+      console.warn('Active org set forbidden', {
+        requestId,
+        userId: user.id,
+        organizationId,
+        code: err.code ?? null,
+        message: err.message,
+      });
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    if (err instanceof ActiveOrgError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    console.error('Active org set failed', {
+      requestId,
+      userId: user.id,
+      organizationId,
+      message: err instanceof Error ? err.message : 'Onbekende fout',
+    });
+    return NextResponse.json({ error: 'Kon actieve organisatie niet instellen' }, { status: 500 });
   }
 
-  cookies().set(ACTIVE_ORG_COOKIE, orgId, {
+  cookies().set(ACTIVE_ORG_COOKIE, organizationId, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
   });
 
-  return NextResponse.json({ ok: true, organization: membership.organization });
+  return NextResponse.json({ ok: true, organizationId });
 }

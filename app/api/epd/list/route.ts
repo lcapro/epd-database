@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getActiveOrgIdFromRequest } from '@/lib/organizations';
+import { requireActiveOrgId } from '@/lib/activeOrg';
+import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: Request) {
+  const requestId = crypto.randomUUID();
   const { searchParams } = new URL(request.url);
   const filters = parseEpdListFilters(searchParams);
   const from = (filters.page - 1) * filters.pageSize;
@@ -22,9 +23,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
-  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  let activeOrgId: string | null = null;
+  try {
+    activeOrgId = requireActiveOrgId();
+    await assertOrgMember(supabase, user.id, activeOrgId);
+  } catch (err) {
+    if (err instanceof OrgAuthError) {
+      console.warn('EPD list forbidden', {
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId ?? null,
+        code: err.code ?? null,
+        message: err.message,
+      });
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+    return NextResponse.json({ error: "Geen actieve organisatie geselecteerd. Kies eerst een organisatie." }, { status: 400 });
   }
 
   let query = supabase
@@ -63,6 +82,13 @@ export async function GET(request: Request) {
   const { data, error, count } = await query;
 
   if (error) {
+    console.error('Supabase EPD list failed', {
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      code: error.code ?? null,
+      message: error.message ?? null,
+    });
     return NextResponse.json(
       { error: error.message },
       {

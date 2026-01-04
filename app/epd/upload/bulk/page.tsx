@@ -1,8 +1,22 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { ParsedEpd } from '@/lib/types';
 
@@ -39,6 +53,23 @@ export default function BulkUploadPage() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  const [activeOrgChecked, setActiveOrgChecked] = useState(false);
+
+  useEffect(() => {
+    const loadActiveOrg = async () => {
+      try {
+        const res = await fetch('/api/org/active', { cache: 'no-store' });
+        if (res.ok) {
+          const json = (await res.json()) as { organizationId: string | null };
+          setActiveOrgId(json.organizationId ?? null);
+        }
+      } finally {
+        setActiveOrgChecked(true);
+      }
+    };
+    loadActiveOrg();
+  }, []);
 
   const handleFiles = (files: FileList | File[]) => {
     const selected = Array.from(files);
@@ -130,8 +161,8 @@ export default function BulkUploadPage() {
           expirationDate: parsed.expirationDate,
           verifierName: parsed.verifierName,
           standardSet: parsed.standardSet,
+          customAttributes: parsed.customAttributes,
           impacts: parsed.impacts,
-          customAttributes: {},
         }),
       });
 
@@ -140,50 +171,48 @@ export default function BulkUploadPage() {
         throw new Error(data?.error || 'Opslaan mislukt');
       }
 
-      const saved = (await saveRes.json()) as { id?: string };
-      updateItem(item.id, {
-        status: 'saved',
-        epdId: saved.id,
-        message: uploadData.parseError ? `Opgeslagen met waarschuwing: ${uploadData.parseError}` : undefined,
-      });
+      const saved = (await saveRes.json()) as { id: string };
+      updateItem(item.id, { status: 'saved', epdId: saved.id, message: 'Opgeslagen' });
     } catch (err) {
-      updateItem(item.id, {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Onbekende fout',
-      });
+      updateItem(item.id, { status: 'error', message: (err as Error).message });
     }
   };
 
-  const startUpload = async () => {
-    const queue = items.filter((item) => item.status === 'pending' || item.status === 'error');
-    if (!queue.length) {
-      setError('Selecteer minimaal één PDF om te uploaden.');
-      return;
-    }
+  const pendingItems = useMemo(() => items.filter((item) => item.status === 'pending'), [items]);
+  const hasItems = items.length > 0;
 
-    setError(null);
+  const startUploads = async () => {
+    if (!pendingItems.length) return;
     setBusy(true);
+    setError(null);
 
-    for (const item of queue) {
-      // eslint-disable-next-line no-await-in-loop
+    for (const item of pendingItems) {
       await uploadSingle(item);
     }
 
     setBusy(false);
   };
 
-  const stats = useMemo(() => {
-    return items.reduce(
-      (acc, item) => {
-        acc.total += 1;
-        if (item.status === 'saved') acc.saved += 1;
-        if (item.status === 'error') acc.failed += 1;
-        if (item.status === 'uploading' || item.status === 'saving') acc.processing += 1;
-        return acc;
-      },
-      { total: 0, saved: 0, failed: 0, processing: 0 },
+  if (activeOrgChecked && !activeOrgId) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <Badge variant="brand">Bulk upload</Badge>
+            <CardTitle className="mt-2">Kies een organisatie</CardTitle>
+            <CardDescription>
+              Selecteer een actieve organisatie voordat je EPD&apos;s kunt verwerken.
+            </CardDescription>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            <Link href="/org" className={buttonStyles({})}>
+              Kies organisatie
+            </Link>
+          </div>
+        </Card>
+      </div>
     );
-  }, [items]);
+  }
 
   return (
     <div className="space-y-6">
@@ -191,76 +220,87 @@ export default function BulkUploadPage() {
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <Badge variant="brand">Bulk upload</Badge>
-            <CardTitle className="mt-2">Meerdere EPD&apos;s uploaden</CardTitle>
-            <CardDescription>Sleep meerdere PDF&apos;s tegelijk om ze direct toe te voegen.</CardDescription>
+            <CardTitle className="mt-2">Upload meerdere EPD&apos;s</CardTitle>
+            <CardDescription>Upload meerdere PDF&apos;s en verwerk ze in één run.</CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={startUpload} disabled={busy} loading={busy}>
-              Upload alles
-            </Button>
-            <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
-              Terug naar enkele upload
-            </Link>
-          </div>
+          <Link href="/epd/upload" className={buttonStyles({ variant: 'secondary' })}>
+            Terug naar single upload
+          </Link>
         </CardHeader>
 
-        <div
-          className="mt-6 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 p-6 text-center"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-        >
-          <p className="text-sm text-gray-600">Sleep meerdere PDF&apos;s hierheen of kies bestanden.</p>
-          <input
-            type="file"
-            multiple
-            accept="application/pdf"
-            onChange={(e) => e.target.files && handleFiles(e.target.files)}
-            className="mt-3 text-sm"
-          />
-          <p className="mt-2 text-xs text-gray-500">{stats.total} bestanden geselecteerd</p>
+        <div className="mt-6 space-y-4">
+          <div
+            className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-600"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={onDrop}
+          >
+            <p>Sleep PDF&apos;s hierheen of klik om te kiezen.</p>
+            <input
+              type="file"
+              accept="application/pdf"
+              multiple
+              className="hidden"
+              id="bulkUploadInput"
+              onChange={(event) => {
+                if (event.target.files?.length) {
+                  handleFiles(event.target.files);
+                  event.target.value = '';
+                }
+              }}
+            />
+            <label htmlFor="bulkUploadInput" className={buttonStyles({})}>
+              Bestanden kiezen
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={startUploads} disabled={!pendingItems.length || busy}>
+              {busy ? 'Bezig...' : 'Start verwerking'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setItems([])}
+              disabled={!hasItems || busy}
+            >
+              Wis lijst
+            </Button>
+          </div>
+
+          {error && <Alert variant="danger">{error}</Alert>}
         </div>
 
-        {error && <Alert variant="danger" className="mt-4">{error}</Alert>}
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Uploadstatus</CardTitle>
-          <CardDescription>
-            {stats.saved} opgeslagen · {stats.failed} mislukt · {stats.processing} bezig
-          </CardDescription>
-        </CardHeader>
-
-        {items.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-600">Nog geen bestanden toegevoegd.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-gray-100">
+        {hasItems && (
+          <div className="mt-8 overflow-x-auto">
             <Table>
               <TableHead>
                 <TableRow>
                   <TableHeaderCell>Bestand</TableHeaderCell>
                   <TableHeaderCell>Status</TableHeaderCell>
-                  <TableHeaderCell>Resultaat</TableHeaderCell>
+                  <TableHeaderCell>Actie</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {items.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium text-gray-800">{item.file.name}</TableCell>
-                    <TableCell className="capitalize">
-                      {item.status === 'pending' && 'Wachtend'}
-                      {item.status === 'uploading' && 'Uploaden'}
-                      {item.status === 'saving' && 'Opslaan'}
-                      {item.status === 'saved' && 'Opgeslagen'}
-                      {item.status === 'error' && 'Mislukt'}
+                    <TableCell>{item.file.name}</TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{item.status}</div>
+                      {item.message && <div className="text-xs text-gray-500">{item.message}</div>}
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">
+                    <TableCell>
                       {item.epdId ? (
                         <Link href={`/epd/${item.epdId}`} className="text-brand-600 hover:text-brand-700">
-                          Bekijk EPD
+                          Open
                         </Link>
                       ) : (
-                        item.message || '-'
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => uploadSingle(item)}
+                          disabled={busy || item.status === 'uploading' || item.status === 'saving'}
+                        >
+                          Opnieuw proberen
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
