@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/classNames';
 import { buttonStyles } from '@/components/ui/button';
+import OrgSwitcher from '@/components/layout/OrgSwitcher';
+import AuthControls from '@/components/layout/AuthControls';
 import logoFull from '@/assets/infra_impact.png';
 import logoIcon from '@/assets/infra_impact-icoon.png';
 
@@ -12,6 +14,7 @@ const navItems = [
   { href: '/', label: 'Overzicht' },
   { href: '/epd-database', label: 'EPD database' },
   { href: '/epd/upload', label: 'Upload' },
+  { href: '/org', label: 'Teams' },
 ];
 
 export default function SiteHeader() {
@@ -54,10 +57,12 @@ export default function SiteHeader() {
             );
           })}
         </nav>
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center gap-3">
+          <OrgSwitcher />
           <Link href="/epd/upload" className={buttonStyles({})}>
             Start upload
           </Link>
+          <AuthControls />
         </div>
       </div>
     </header>

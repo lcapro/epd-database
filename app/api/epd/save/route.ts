@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getActiveOrgIdFromRequest } from '@/lib/organizations';
 import { EpdSetType, ParsedImpact } from '@/lib/types';
 import {
   ALLOWED_SETS,
@@ -77,12 +79,25 @@ export async function POST(request: Request) {
   const productCategory = extractProductCategory(cleanedCustomAttributes);
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
-  const admin = getAdminClient();
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: epd, error } = await admin
+  if (!user) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+  }
+
+  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  if (!activeOrgId) {
+    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+  }
+
+  const { data: epd, error } = await supabase
     .from('epds')
     .upsert(
       {
+        organization_id: activeOrgId,
         epd_file_id: normalizeOptionalString(fileId),
         product_name: cleanedProductName,
         functional_unit: cleanedFunctionalUnit,
@@ -129,7 +144,8 @@ export async function POST(request: Request) {
         },
       },
       {
-        onConflict: 'product_name,producer_name,functional_unit,determination_method_version,pcr_version,database_version',
+        onConflict:
+          'organization_id,product_name,producer_name,functional_unit,determination_method_version,pcr_version,database_version',
       },
     )
     .select('id')
@@ -147,7 +163,11 @@ export async function POST(request: Request) {
   }
 
   if (cleanedImpacts.length) {
-    const { error: cleanupError } = await admin.from('epd_impacts').delete().eq('epd_id', epd.id);
+    const { error: cleanupError } = await supabase
+      .from('epd_impacts')
+      .delete()
+      .eq('epd_id', epd.id)
+      .eq('organization_id', activeOrgId);
     if (cleanupError) {
       console.warn('Kon bestaande impacts niet verwijderen', {
         requestId,
@@ -157,6 +177,7 @@ export async function POST(request: Request) {
       });
     }
     const mapped = cleanedImpacts.map((impact) => ({
+      organization_id: activeOrgId,
       epd_id: epd.id,
       indicator: impact.indicator,
       set_type: impact.setType,
@@ -165,7 +186,7 @@ export async function POST(request: Request) {
       unit: impact.unit,
     }));
 
-    const { error: impactError } = await admin.from('epd_impacts').insert(mapped);
+    const { error: impactError } = await supabase.from('epd_impacts').insert(mapped);
     if (impactError) {
       console.error('Supabase impact save failed', {
         requestId,
@@ -173,7 +194,7 @@ export async function POST(request: Request) {
         code: impactError.code ?? null,
         message: impactError.message ?? null,
       });
-      await admin.from('epds').delete().eq('id', epd.id);
+      await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
       return NextResponse.json({ error: impactError.message }, { status: 500 });
     }
   }

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getAdminClient } from '@/lib/supabaseClient';
+import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getActiveOrgIdFromRequest } from '@/lib/organizations';
 import { buildDatabaseExportRowsWithImpacts, exportToCsv, exportToWorkbook } from '@/lib/epdExport';
 import type { DatabaseExportRecord, DatabaseExportWithImpacts } from '@/lib/epdExport';
 import type { EpdImpactRecord } from '@/lib/types';
@@ -11,9 +13,21 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const format = searchParams.get('format') || 'excel';
   const filters = parseEpdListFilters(searchParams);
-  const admin = getAdminClient();
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  let query = admin
+  if (!user) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+  }
+
+  const activeOrgId = getActiveOrgIdFromRequest(request, cookies());
+  if (!activeOrgId) {
+    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd' }, { status: 400 });
+  }
+
+  let query = supabase
     .from('epds')
     .select(
       [
@@ -34,6 +48,7 @@ export async function GET(request: Request) {
       ].join(', '),
     );
 
+  query = query.eq('organization_id', activeOrgId);
   query = applyEpdListFilters(query, filters);
 
   const sortColumn = filters.sort ?? 'publication_date';

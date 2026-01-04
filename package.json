@@ -10,6 +10,7 @@
     "test": "node --test --loader ts-node/esm"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.2",
     "exceljs": "^4.4.0",
     "next": "^14.2.3",
