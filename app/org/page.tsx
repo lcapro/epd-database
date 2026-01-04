@@ -18,9 +18,11 @@ type Membership = {
   organization: Organization | null;
 };
 
+type MembershipWithOrg = Membership & { organization: Organization };
+
 export default function OrgOverviewPage() {
   const router = useRouter();
-  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [memberships, setMemberships] = useState<MembershipWithOrg[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function OrgOverviewPage() {
         if (membershipError) throw membershipError;
         const memberships = (data || []) as Membership[];
         const filtered = memberships.filter(
-          (membership): membership is Membership & { organization: Organization } => Boolean(membership.organization),
+          (membership): membership is MembershipWithOrg => Boolean(membership.organization),
         );
         setMemberships(filtered);
 
