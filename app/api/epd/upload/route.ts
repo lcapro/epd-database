@@ -76,7 +76,6 @@ export async function POST(request: Request) {
         requestId,
         userId: user.id,
         organizationId: activeOrgId,
-        code: uploadError.code ?? null,
         message: uploadError.message ?? null,
       });
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
