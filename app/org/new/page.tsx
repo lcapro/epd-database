@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { v4 as uuidv4 } from 'uuid';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Alert, Button, Card, CardDescription, CardHeader, CardTitle, FormField, Input } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
@@ -31,6 +32,8 @@ export default function OrgNewPage() {
 
     const supabase = createSupabaseBrowserClient();
     const finalSlug = slug || derivedSlug;
+    const orgId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : uuidv4();
 
     try {
       const {
@@ -38,18 +41,19 @@ export default function OrgNewPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Niet ingelogd');
 
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({ name, slug: finalSlug })
-        .select('id')
-        .single();
+      const { error: orgError } = await supabase.from('organizations').insert({
+        id: orgId,
+        name,
+        slug: finalSlug,
+        created_by: user.id,
+      });
 
-      if (orgError || !org) {
-        throw orgError ?? new Error('Kon organisatie niet aanmaken');
+      if (orgError) {
+        throw orgError;
       }
 
       const { error: memberError } = await supabase.from('organization_members').insert({
-        organization_id: org.id,
+        organization_id: orgId,
         role: 'owner',
         user_id: user.id,
       });
@@ -61,7 +65,7 @@ export default function OrgNewPage() {
       await fetch('/api/org/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orgId: org.id }),
+        body: JSON.stringify({ orgId }),
       });
 
       router.push('/epd-database');
