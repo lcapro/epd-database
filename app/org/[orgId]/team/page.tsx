@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -55,7 +55,7 @@ export default function OrgTeamPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -80,13 +80,13 @@ export default function OrgTeamPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId]);
 
   useEffect(() => {
     if (orgId) {
       fetchData();
     }
-  }, [orgId]);
+  }, [fetchData, orgId]);
 
   const handleAddMember = async (event: FormEvent) => {
     event.preventDefault();
