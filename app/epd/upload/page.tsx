@@ -299,27 +299,6 @@ export default function UploadPage() {
     }
   };
 
-  if (activeOrgChecked && !activeOrgId) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <Badge variant="brand">EPD upload</Badge>
-            <CardTitle className="mt-2">Kies een organisatie</CardTitle>
-            <CardDescription>
-              Selecteer een actieve organisatie voordat je een EPD kunt verwerken.
-            </CardDescription>
-          </CardHeader>
-          <div className="px-6 pb-6">
-            <Link href="/org" className={buttonStyles({})}>
-              Kies organisatie
-            </Link>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
   // UI helpers: indicator groepen
   const groupedIndicators = useMemo(() => {
     const groups: Record<string, ImpactIndicatorCode[]> = {
@@ -400,6 +379,27 @@ export default function UploadPage() {
       </div>
     );
   }, [parsed]);
+
+  if (activeOrgChecked && !activeOrgId) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <Badge variant="brand">EPD upload</Badge>
+            <CardTitle className="mt-2">Kies een organisatie</CardTitle>
+            <CardDescription>
+              Selecteer een actieve organisatie voordat je een EPD kunt verwerken.
+            </CardDescription>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            <Link href="/org" className={buttonStyles({})}>
+              Kies organisatie
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <form className="space-y-6" onSubmit={onSubmit}>

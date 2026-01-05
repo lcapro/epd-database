@@ -1,16 +1,18 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Alert, Button, Card, CardDescription, CardHeader, CardTitle, FormField, Input } from '@/components/ui';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 
 type Mode = 'login' | 'register';
 
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { status: authStatus } = useAuthStatus();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +21,13 @@ export default function LoginClient() {
   const [error, setError] = useState<string | null>(null);
 
   const nextPath = searchParams.get('next') || '/org';
+
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      router.replace(nextPath);
+      router.refresh();
+    }
+  }, [authStatus, nextPath, router]);
 
   const handleAuth = async (event: FormEvent) => {
     event.preventDefault();
@@ -67,6 +76,20 @@ export default function LoginClient() {
       setLoading(false);
     }
   };
+
+  if (authStatus === 'loading') {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <Card>
+          <CardHeader className="space-y-2">
+            <CardTitle>Sessie controleren</CardTitle>
+            <CardDescription>We controleren of je al bent ingelogd.</CardDescription>
+          </CardHeader>
+          <div className="p-6 text-sm text-gray-600">Even geduld...</div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-6">

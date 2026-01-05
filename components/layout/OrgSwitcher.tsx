@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Select } from '@/components/ui';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
+import { useActiveOrg } from '@/lib/org/useActiveOrg';
 
 type Organization = {
   id: string;
@@ -20,23 +22,29 @@ type OrgListResponse = {
   items: Membership[];
 };
 
-type ActiveOrgResponse = {
-  organizationId: string | null;
-};
-
 export default function OrgSwitcher() {
   const router = useRouter();
+  const { status: authStatus } = useAuthStatus();
+  const { status: activeStatus, organizationId, setOrganizationId, error: activeOrgError } = useActiveOrg(
+    authStatus === 'authenticated',
+  );
   const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string>('');
-  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
+      if (authStatus !== 'authenticated') {
+        setOrgs([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setListError(null);
       try {
-        const [orgRes, activeRes] = await Promise.all([
-          fetch('/api/org/list', { cache: 'no-store' }),
-          fetch('/api/org/active', { cache: 'no-store' }),
-        ]);
+        const orgRes = await fetch('/api/org/list', { cache: 'no-store' });
 
         if (orgRes.ok) {
           const json = (await orgRes.json()) as OrgListResponse;
@@ -44,30 +52,52 @@ export default function OrgSwitcher() {
             .map((membership) => membership.organization)
             .filter((org): org is Organization => Boolean(org));
           setOrgs(orgList);
+        } else {
+          const data = await orgRes.json().catch(() => null);
+          throw new Error(data?.error || 'Kon organisaties niet laden');
         }
-
-        if (activeRes.ok) {
-          const json = (await activeRes.json()) as ActiveOrgResponse;
-          setActiveOrgId(json.organizationId ?? '');
-        }
+      } catch (err) {
+        setListError(err instanceof Error ? err.message : 'Kon organisaties niet laden');
       } finally {
-        setReady(true);
+        setLoading(false);
       }
     };
     load();
-  }, []);
+  }, [authStatus]);
 
   const handleSwitch = async (orgId: string) => {
-    setActiveOrgId(orgId);
-    await fetch('/api/org/active', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId: orgId }),
-    });
-    router.refresh();
+    if (switching) return;
+    const previousOrgId = organizationId;
+    setSwitching(true);
+    setOrganizationId(orgId);
+    try {
+      const response = await fetch('/api/org/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: orgId }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Kon organisatie niet activeren');
+      }
+      router.refresh();
+    } catch (err) {
+      setOrganizationId(previousOrgId ?? null);
+      setListError(err instanceof Error ? err.message : 'Kon organisatie niet activeren');
+    } finally {
+      setSwitching(false);
+    }
   };
 
-  if (!ready) return null;
+  if (authStatus !== 'authenticated') return null;
+  if (loading || activeStatus === 'loading' || activeStatus === 'idle') return null;
+  if (listError || activeOrgError) {
+    return (
+      <span className="text-xs font-semibold text-danger-600" title={listError ?? activeOrgError ?? ''}>
+        Organisaties niet geladen
+      </span>
+    );
+  }
 
   if (!orgs.length) {
     return (
@@ -79,7 +109,12 @@ export default function OrgSwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={activeOrgId} onChange={(event) => handleSwitch(event.target.value)} className="w-48">
+      <Select
+        value={organizationId ?? ''}
+        onChange={(event) => handleSwitch(event.target.value)}
+        className="w-48"
+        disabled={switching}
+      >
         <option value="" disabled>
           Selecteer organisatie
         </option>

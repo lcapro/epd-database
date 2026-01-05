@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
+import { useActiveOrg } from '@/lib/org/useActiveOrg';
 
 type Organization = {
   id: string;
@@ -23,26 +25,30 @@ type OrgListResponse = {
   items: Membership[];
 };
 
-type ActiveOrgResponse = {
-  organizationId: string | null;
-};
-
 export default function OrgOverviewPage() {
   const router = useRouter();
+  const { status: authStatus } = useAuthStatus();
+  const {
+    status: activeStatus,
+    organizationId: activeOrgId,
+    setOrganizationId,
+    error: activeError,
+  } = useActiveOrg(authStatus === 'authenticated');
   const [memberships, setMemberships] = useState<MembershipWithOrg[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [settingOrgId, setSettingOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (authStatus !== 'authenticated') {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
-        const [orgRes, activeRes] = await Promise.all([
-          fetch('/api/org/list', { cache: 'no-store' }),
-          fetch('/api/org/active', { cache: 'no-store' }),
-        ]);
+        const orgRes = await fetch('/api/org/list', { cache: 'no-store' });
 
         if (!orgRes.ok) {
           const data = await orgRes.json().catch(() => null);
@@ -53,11 +59,6 @@ export default function OrgOverviewPage() {
           (membership): membership is MembershipWithOrg => Boolean(membership.organization),
         );
         setMemberships(filtered);
-
-        if (activeRes.ok) {
-          const json = (await activeRes.json()) as ActiveOrgResponse;
-          setActiveOrgId(json.organizationId ?? null);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Kon organisaties niet laden');
       } finally {
@@ -65,17 +66,30 @@ export default function OrgOverviewPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [authStatus]);
 
   const handleSetActive = async (orgId: string) => {
-    await fetch('/api/org/active', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId: orgId }),
-    });
-    setActiveOrgId(orgId);
-    router.push('/epd-database');
-    router.refresh();
+    if (settingOrgId) return;
+    setSettingOrgId(orgId);
+    setError(null);
+    try {
+      const response = await fetch('/api/org/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: orgId }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Kon organisatie niet activeren');
+      }
+      setOrganizationId(orgId);
+      router.push('/epd-database');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kon organisatie niet activeren');
+    } finally {
+      setSettingOrgId(null);
+    }
   };
 
   return (
@@ -92,10 +106,16 @@ export default function OrgOverviewPage() {
           </Link>
         </CardHeader>
 
-        {loading && <p className="mt-4 text-sm text-gray-600">Laden...</p>}
-        {error && <Alert variant="danger" className="mt-4">{error}</Alert>}
+        {(authStatus === 'loading' || loading || activeStatus === 'loading') && (
+          <p className="mt-4 text-sm text-gray-600">Laden...</p>
+        )}
+        {(error || activeError) && (
+          <Alert variant="danger" className="mt-4">
+            {error ?? activeError}
+          </Alert>
+        )}
 
-        {!loading && memberships.length === 0 && (
+        {!loading && authStatus === 'authenticated' && memberships.length === 0 && (
           <div className="mt-6 rounded-2xl border border-dashed border-gray-200 p-6 text-sm text-gray-600">
             Je bent nog geen lid van een organisatie. Maak er een aan om te starten.
           </div>
@@ -113,13 +133,15 @@ export default function OrgOverviewPage() {
                   {membership.organization.slug} · rol: {membership.role}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={activeOrgId === membership.organization.id ? 'secondary' : 'primary'}
-                  onClick={() => handleSetActive(membership.organization.id)}
-                >
-                  {activeOrgId === membership.organization.id ? 'Actief' : 'Activeer'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={activeOrgId === membership.organization.id ? 'secondary' : 'primary'}
+                    loading={settingOrgId === membership.organization.id}
+                    disabled={Boolean(settingOrgId)}
+                    onClick={() => handleSetActive(membership.organization.id)}
+                  >
+                    {activeOrgId === membership.organization.id ? 'Actief' : 'Activeer'}
+                  </Button>
                 <Link
                   href={`/org/${membership.organization.id}/team`}
                   className={buttonStyles({ variant: 'secondary' })}

@@ -1,21 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { buttonStyles } from '@/components/ui/button';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 
 export default function AuthControls() {
-  const [email, setEmail] = useState<string | null>(null);
+  const { status, user } = useAuthStatus();
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-    });
-  }, []);
+  if (status === 'loading') {
+    return <div className="h-9 w-24 animate-pulse rounded-xl bg-gray-100" />;
+  }
 
-  if (!email) {
+  if (status !== 'authenticated') {
     return (
       <Link href="/login" className={buttonStyles({ variant: 'secondary', size: 'sm' })}>
         Inloggen
@@ -25,7 +21,7 @@ export default function AuthControls() {
 
   return (
     <div className="flex items-center gap-2 text-xs text-gray-500">
-      <span className="hidden md:inline">{email}</span>
+      <span className="hidden md:inline">{user?.email}</span>
       <Link href="/logout" className={buttonStyles({ variant: 'secondary', size: 'sm' })}>
         Uitloggen
       </Link>
