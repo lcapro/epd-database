@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { requireActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import type { EpdSetType, ParsedImpact } from '@/lib/types';
@@ -17,7 +17,7 @@ import {
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -27,7 +27,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     console.warn('Supabase EPD detail missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       epdId: params.id,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
@@ -161,7 +161,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -171,7 +171,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     console.warn('Supabase EPD update missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       epdId: params.id,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
@@ -321,7 +321,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -331,7 +331,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     console.warn('Supabase EPD delete missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       epdId: params.id,
       code: authError?.code ?? null,
       message: authError?.message ?? null,

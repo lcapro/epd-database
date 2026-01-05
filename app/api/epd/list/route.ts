@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { requireActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const to = from + filters.pageSize - 1;
 
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     console.warn('Supabase EPD list missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });

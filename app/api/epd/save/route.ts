@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { assertNoSupabaseError } from '@/lib/supabase/assertNoSupabaseError';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     console.warn('Supabase EPD save missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       impactsCount,
       epdId: null,
       organizationId: getActiveOrgId() ?? normalizeOptionalString(organizationId),

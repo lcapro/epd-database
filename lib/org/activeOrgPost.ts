@@ -1,12 +1,13 @@
 import { ACTIVE_ORG_COOKIE } from '../activeOrgConstants';
 import { ActiveOrgError } from '../activeOrgErrors';
 import { assertOrgMember, OrgAuthError } from '../orgAuth';
+import type { SupabaseCookieStatus } from '../supabase/server';
 import { getSupabaseUserWithRefresh } from '../supabase/session';
 
 type ActiveOrgPostContext = {
   request: Request;
   supabase: Parameters<typeof assertOrgMember>[0];
-  hasCookie: boolean;
+  cookieStatus: SupabaseCookieStatus;
   requestId?: string;
   assertMember?: typeof assertOrgMember;
 };
@@ -33,17 +34,20 @@ function normalizeOrganizationId(value: unknown): string | null {
 export async function buildActiveOrgPostResult({
   request,
   supabase,
-  hasCookie,
+  cookieStatus,
   requestId = crypto.randomUUID(),
   assertMember = assertOrgMember,
 }: ActiveOrgPostContext): Promise<ActiveOrgPostResult> {
-  const { user, error: authError } = await getSupabaseUserWithRefresh(supabase, hasCookie);
+  const { user, error: authError } = await getSupabaseUserWithRefresh(
+    supabase,
+    cookieStatus.hasSupabaseAuthCookie,
+  );
 
   if (!user) {
     console.warn('Supabase active org set missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });

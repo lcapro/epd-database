@@ -50,7 +50,13 @@ export default function OrgOverviewPage() {
       setLoading(true);
       setError(null);
       try {
-        const orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+        let orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+        if (orgRes.status === 401) {
+          const refreshed = await ensureSupabaseSession();
+          if (refreshed) {
+            orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+          }
+        }
 
         if (!orgRes.ok) {
           const data = await orgRes.json().catch(() => null);

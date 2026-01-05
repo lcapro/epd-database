@@ -21,9 +21,12 @@ export function useAuthStatus(): AuthState {
     let active = true;
     const supabase = createSupabaseBrowserClient();
 
+    const authCookiePattern = /^sb-.*(auth-token|access-token|refresh-token)$/;
     const hasAuthCookie = () => {
       if (typeof document === 'undefined') return false;
-      return document.cookie.split(';').some((cookie) => cookie.trim().startsWith('sb-'));
+      return document.cookie
+        .split(';')
+        .some((cookie) => authCookiePattern.test(cookie.trim().split('=')[0]));
     };
 
     const applySession = (session: { user: User } | null) => {
