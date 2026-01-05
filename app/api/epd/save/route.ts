@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
 import { assertNoSupabaseError } from '@/lib/supabase/assertNoSupabaseError';
 import { getActiveOrgId } from '@/lib/activeOrg';
@@ -14,6 +15,32 @@ import {
   resolveStatus,
   selectImpactValue,
 } from '@/lib/epd/saveUtils';
+
+type EpdHashInput = {
+  organizationId: string;
+  productName: string;
+  producerName: string | null;
+  functionalUnit: string;
+  determinationMethodVersion: string | null;
+  pcrVersion: string | null;
+  databaseVersion: string | null;
+};
+
+const normalizeHashValue = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+
+const makeEpdHashKey = (input: EpdHashInput) => {
+  const hashPayload = [
+    normalizeHashValue(input.organizationId),
+    normalizeHashValue(input.productName),
+    normalizeHashValue(input.producerName),
+    normalizeHashValue(input.functionalUnit),
+    normalizeHashValue(input.determinationMethodVersion),
+    normalizeHashValue(input.pcrVersion),
+    normalizeHashValue(input.databaseVersion),
+  ].join('|');
+
+  return createHash('md5').update(hashPayload).digest('hex');
+};
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
@@ -56,6 +83,7 @@ export async function POST(request: Request) {
 
   const cleanedProductName = normalizeOptionalString(productName);
   const cleanedFunctionalUnit = normalizeOptionalString(functionalUnit);
+  const cleanedProducerName = normalizeOptionalString(producerName);
 
   if (!cleanedProductName || !cleanedFunctionalUnit) {
     return NextResponse.json({ error: 'productName en functionalUnit zijn verplicht' }, { status: 400 });
@@ -131,6 +159,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Kon lidmaatschap niet controleren' }, { status: 500 });
   }
 
+  const hashKey = makeEpdHashKey({
+    organizationId: activeOrgId,
+    productName: cleanedProductName,
+    producerName: cleanedProducerName,
+    functionalUnit: cleanedFunctionalUnit,
+    determinationMethodVersion: determinationMethod.version,
+    pcrVersion: normalizeOptionalString(pcrVersion),
+    databaseVersion,
+  });
+
+  console.info('EPD hash key computed', {
+    requestId,
+    hashKey,
+    organizationId: activeOrgId,
+  });
+
   const epdResult = await supabase
     .from('epds')
     .upsert(
@@ -139,8 +183,8 @@ export async function POST(request: Request) {
         epd_file_id: normalizeOptionalString(fileId),
         product_name: cleanedProductName,
         functional_unit: cleanedFunctionalUnit,
-        producer_name: normalizeOptionalString(producerName),
-        manufacturer: normalizeOptionalString(producerName),
+        producer_name: cleanedProducerName,
+        manufacturer: cleanedProducerName,
         lca_method: normalizeOptionalString(lcaMethod),
         determination_method_name: determinationMethod.name,
         determination_method_version: determinationMethod.version,
@@ -161,6 +205,7 @@ export async function POST(request: Request) {
         co2_d: co2D,
         status,
         status_reason: statusReason,
+        hash_key: hashKey,
         raw_extracted: {
           fileId,
           parsed: {
@@ -182,8 +227,7 @@ export async function POST(request: Request) {
         },
       },
       {
-        onConflict:
-          'organization_id,product_name,producer_name,functional_unit,determination_method_version,pcr_version,database_version',
+        onConflict: 'organization_id,hash_key',
       },
     )
     .select('id')
