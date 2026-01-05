@@ -3,6 +3,8 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { postActiveOrg } from '@/lib/org/activeOrgClient';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import {
   Alert,
@@ -53,6 +55,7 @@ export default function OrgTeamPage() {
   const [role, setRole] = useState('member');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settingActive, setSettingActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -143,14 +146,31 @@ export default function OrgTeamPage() {
   };
 
   const handleSetActive = async () => {
-    await fetch('/api/org/active', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ organizationId: orgId }),
-    });
-    router.push('/epd-database');
-    router.refresh();
+    if (settingActive) return;
+    setSettingActive(true);
+    setError(null);
+    try {
+      let response = await postActiveOrg(orgId);
+      if (response.status === 401) {
+        const refreshed = await ensureSupabaseSession();
+        if (refreshed) {
+          response = await postActiveOrg(orgId);
+        }
+      }
+      if (response.status === 401) {
+        throw new Error('Je sessie is verlopen. Log opnieuw in.');
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Kon organisatie niet activeren');
+      }
+      router.push('/epd-database');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kon organisatie niet activeren');
+    } finally {
+      setSettingActive(false);
+    }
   };
 
   return (
@@ -163,7 +183,7 @@ export default function OrgTeamPage() {
             <CardDescription>Beheer rollen en voeg teamleden toe.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleSetActive} variant="secondary">
+            <Button onClick={handleSetActive} variant="secondary" loading={settingActive} disabled={settingActive}>
               Gebruik als actieve org
             </Button>
             <Link href="/org" className={buttonStyles({ variant: 'secondary' })}>

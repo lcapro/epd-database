@@ -4,6 +4,8 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { postActiveOrg } from '@/lib/org/activeOrgClient';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Alert, Button, Card, CardDescription, CardHeader, CardTitle, FormField, Input } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
@@ -62,12 +64,20 @@ export default function OrgNewPage() {
         throw memberError;
       }
 
-      await fetch('/api/org/active', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ organizationId: orgId }),
-      });
+      let response = await postActiveOrg(orgId);
+      if (response.status === 401) {
+        const refreshed = await ensureSupabaseSession();
+        if (refreshed) {
+          response = await postActiveOrg(orgId);
+        }
+      }
+      if (response.status === 401) {
+        throw new Error('Je sessie is verlopen. Log opnieuw in.');
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Kon organisatie niet activeren');
+      }
 
       router.push('/epd-database');
       router.refresh();
