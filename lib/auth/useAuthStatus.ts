@@ -3,7 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { hasSupabaseAuthCookie } from '@/lib/auth/supabaseAuthCookies';
 
-export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 type AuthState = {
   status: AuthStatus;
@@ -35,7 +35,7 @@ export function useAuthStatus(): AuthState {
       const { data, error } = await supabase.auth.getSession();
       if (!active) return;
       if (error) {
-        setState({ status: 'error', user: null, error: error.message });
+        setState({ status: 'unauthenticated', user: null, error: error.message });
         return;
       }
 
@@ -48,7 +48,7 @@ export function useAuthStatus(): AuthState {
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
         if (!active) return;
         if (refreshError) {
-          setState({ status: 'error', user: null, error: refreshError.message });
+          setState({ status: 'unauthenticated', user: null, error: refreshError.message });
           return;
         }
         if (refreshData.session && hasSupabaseAuthCookie()) {
