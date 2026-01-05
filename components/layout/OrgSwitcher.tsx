@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Select } from '@/components/ui';
 import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 import { useAuthStatus } from '@/lib/auth/useAuthStatus';
@@ -26,11 +26,14 @@ type OrgListResponse = {
 
 export default function OrgSwitcher() {
   const router = useRouter();
+  const pathname = usePathname();
   const { status: authStatus } = useAuthStatus();
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const isAuthRoute = pathname === '/login' || pathname === '/logout';
+  const allowOrgContext = authStatus === 'authenticated' && sessionReady && !isAuthRoute;
   const { status: activeStatus, organizationId, setOrganizationId, error: activeOrgError } = useActiveOrg(
-    authStatus === 'authenticated' && sessionReady,
+    allowOrgContext,
   );
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +44,13 @@ export default function OrgSwitcher() {
   useEffect(() => {
     let active = true;
     const confirmSession = async () => {
+      if (isAuthRoute) {
+        if (active) {
+          setSessionReady(false);
+          setSessionError(null);
+        }
+        return;
+      }
       if (authStatus !== 'authenticated') {
         if (active) {
           setSessionReady(false);
@@ -63,10 +73,15 @@ export default function OrgSwitcher() {
     return () => {
       active = false;
     };
-  }, [authStatus]);
+  }, [authStatus, isAuthRoute]);
 
   useEffect(() => {
     const load = async () => {
+      if (isAuthRoute) {
+        setOrgs([]);
+        setLoading(false);
+        return;
+      }
       if (authStatus !== 'authenticated') {
         setOrgs([]);
         setLoading(false);
@@ -105,7 +120,7 @@ export default function OrgSwitcher() {
       }
     };
     load();
-  }, [authStatus, sessionReady]);
+  }, [authStatus, isAuthRoute, sessionReady]);
 
   const handleSwitch = async (orgId: string) => {
     if (!canSwitchOrg) {
@@ -140,6 +155,7 @@ export default function OrgSwitcher() {
     }
   };
 
+  if (isAuthRoute) return null;
   if (authStatus !== 'authenticated') return null;
   if (loading || activeStatus === 'loading' || activeStatus === 'idle' || !sessionReady) return null;
   if (listError || activeOrgError || sessionError) {

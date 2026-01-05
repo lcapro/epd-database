@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Alert, Button, Card, CardDescription, CardHeader, CardTitle, FormField, Input } from '@/components/ui';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { hasSupabaseAuthCookie } from '@/lib/auth/supabaseAuthCookies';
 import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 
 type Mode = 'login' | 'register';
@@ -42,6 +44,16 @@ export default function LoginClient() {
       if (mode === 'login') {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
+        const sessionSynced = await ensureSupabaseSession();
+        if (process.env.NODE_ENV === 'development') {
+          const { data } = await supabase.auth.getSession();
+          console.info('Login session check', {
+            hasSession: Boolean(data.session),
+            hasAuthCookie: hasSupabaseAuthCookie(),
+            sessionSynced,
+          });
+        }
+        router.replace(nextPath);
         router.refresh();
       } else {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
