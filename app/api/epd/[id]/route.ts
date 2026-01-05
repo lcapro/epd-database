@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
 import { requireActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import type { EpdSetType, ParsedImpact } from '@/lib/types';
@@ -16,12 +16,22 @@ import {
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.warn('Supabase EPD detail missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      epdId: params.id,
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
@@ -150,12 +160,22 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   const productCategory = extractProductCategory(cleanedCustomAttributes);
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.warn('Supabase EPD update missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      epdId: params.id,
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
@@ -300,12 +320,22 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.warn('Supabase EPD delete missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      epdId: params.id,
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 

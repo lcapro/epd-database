@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { requireActiveOrgId } from '@/lib/activeOrg';
+import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { parseEpd } from '@/lib/epdParser';
 
@@ -18,18 +18,36 @@ function sanitizePdfText(text: string): string {
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = createSupabaseRouteClient();
+    const hasCookie = hasSupabaseAuthCookie();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
     if (!user) {
+      console.warn('Supabase EPD upload missing user', {
+        requestId,
+        hasUser: false,
+        hasCookie,
+        epdId: null,
+        impactsCount: null,
+        organizationId: getActiveOrgId(),
+        code: authError?.code ?? null,
+        message: authError?.message ?? null,
+      });
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
     }
 
-    let activeOrgId: string | null = null;
+    const formData = await request.formData();
+    const fallbackOrgId = formData.get('organizationId');
+    const activeOrgId = getActiveOrgId() ?? (typeof fallbackOrgId === 'string' ? fallbackOrgId : null);
+
+    if (!activeOrgId) {
+      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    }
+
     try {
-      activeOrgId = requireActiveOrgId();
       await assertOrgMember(supabase, user.id, activeOrgId);
     } catch (err) {
       if (err instanceof OrgAuthError) {
@@ -45,12 +63,6 @@ export async function POST(request: Request) {
       const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
       return NextResponse.json({ error: message }, { status: 400 });
     }
-
-    if (!activeOrgId) {
-      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
-    }
-
-    const formData = await request.formData();
     const file = formData.get('file');
 
     if (!(file instanceof Blob)) {
@@ -76,6 +88,8 @@ export async function POST(request: Request) {
         requestId,
         userId: user.id,
         organizationId: activeOrgId,
+        epdId: null,
+        impactsCount: null,
         message: uploadError.message ?? null,
       });
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
@@ -84,16 +98,20 @@ export async function POST(request: Request) {
     let parsedPdfText = '';
     let parsedEpd: ReturnType<typeof parseEpd> | null = null;
     let parseError: string | null = null;
+    let impactsCount: number | null = null;
 
     try {
       const parsedPdf = await pdfParse(buffer);
       parsedPdfText = sanitizePdfText(parsedPdf.text || '');
       parsedEpd = parseEpd(parsedPdfText);
+      impactsCount = parsedEpd.impacts?.length ?? null;
     } catch (err) {
       console.error('Kon PDF-tekst niet uitlezen', {
         requestId,
         userId: user.id,
         organizationId: activeOrgId,
+        epdId: null,
+        impactsCount,
         message: err instanceof Error ? err.message : 'Onbekende fout',
       });
       parseError = err instanceof Error ? err.message : 'Onbekende fout bij het lezen van de PDF-tekst';
@@ -129,11 +147,21 @@ export async function POST(request: Request) {
         requestId,
         userId: user.id,
         organizationId: activeOrgId,
+        epdId: null,
+        impactsCount,
         code: insertError?.code ?? null,
         message: insertError?.message ?? null,
       });
       return NextResponse.json({ error: insertError?.message || 'Kon bestand niet opslaan' }, { status: 500 });
     }
+
+    console.info('EPD upload stored', {
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      impactsCount,
+      epdId: null,
+    });
 
     return NextResponse.json({
       fileId: insertData.id,
