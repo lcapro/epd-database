@@ -71,6 +71,12 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Actieve organisatie wordt opgeslagen in een httpOnly cookie (`active_org_id`) en bepaalt alle EPD-queries.
 - Schakel van organisatie via de selector in de topbar of via `/org`.
 
+## Storage bucket + policies
+- De upload gebruikt de bucket uit `SUPABASE_STORAGE_BUCKET` (default: `epd-pdfs`).
+- Objecten worden altijd org-scoped opgeslagen als: `org/<organizationId>/<fileId>.pdf`.
+- De API slaat dit pad op in `epd_files.storage_path` zodat download-links het juiste pad gebruiken.
+- RLS policies op `storage.objects` moeten upload en read toestaan voor leden van de juiste organisatie.
+
 ## UI redesign (InfraImpact look & feel)
 - Nieuwe design tokens en UI-kit componenten in `components/ui/`.
 - Layout met enterprise header/footer en ruimere content container.
