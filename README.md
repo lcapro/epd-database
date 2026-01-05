@@ -71,6 +71,10 @@ Next.js 14 applicatie voor het beheren van Environmental Product Declarations (E
 - Actieve organisatie wordt opgeslagen in een httpOnly cookie (`active_org_id`) en bepaalt alle EPD-queries.
 - Schakel van organisatie via de selector in de topbar of via `/org`.
 
+## Manual test checklist
+- Login → ga naar `/org` → klik **Activeer** → verwacht HTTP 200 en `active_org_id` cookie gezet.
+- DevTools → Network → POST `/api/org/active` → controleer dat `sb-*` auth cookies meegaan.
+
 ## Storage bucket + policies
 - De upload gebruikt de bucket uit `SUPABASE_STORAGE_BUCKET` (default: `epd-pdfs`).
 - Objecten worden altijd org-scoped opgeslagen als: `org/<organizationId>/<fileId>.pdf`.

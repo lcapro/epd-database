@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { hasSupabaseAuthCookie } from '@/lib/auth/supabaseAuthCookies';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';
 
@@ -21,14 +22,6 @@ export function useAuthStatus(): AuthState {
     let active = true;
     const supabase = createSupabaseBrowserClient();
 
-    const authCookiePattern = /^sb-.*(auth-token|access-token|refresh-token)$/;
-    const hasAuthCookie = () => {
-      if (typeof document === 'undefined') return false;
-      return document.cookie
-        .split(';')
-        .some((cookie) => authCookiePattern.test(cookie.trim().split('=')[0]));
-    };
-
     const applySession = (session: { user: User } | null) => {
       const user = session?.user ?? null;
       setState({
@@ -46,20 +39,22 @@ export function useAuthStatus(): AuthState {
         return;
       }
 
-      if (data.session) {
+      if (data.session && hasSupabaseAuthCookie()) {
         applySession(data.session);
         return;
       }
 
-      if (hasAuthCookie()) {
+      if (data.session || hasSupabaseAuthCookie()) {
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
         if (!active) return;
         if (refreshError) {
           setState({ status: 'error', user: null, error: refreshError.message });
           return;
         }
-        applySession(refreshData.session ?? null);
-        return;
+        if (refreshData.session && hasSupabaseAuthCookie()) {
+          applySession(refreshData.session);
+          return;
+        }
       }
 
       applySession(null);
