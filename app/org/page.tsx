@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import { useActiveOrg } from '@/lib/org/useActiveOrg';
 
@@ -73,11 +74,21 @@ export default function OrgOverviewPage() {
     setSettingOrgId(orgId);
     setError(null);
     try {
-      const response = await fetch('/api/org/active', {
+      let response = await fetch('/api/org/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ organizationId: orgId }),
       });
+      if (response.status === 401) {
+        const refreshed = await ensureSupabaseSession();
+        if (refreshed) {
+          response = await fetch('/api/org/active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organizationId: orgId }),
+          });
+        }
+      }
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         throw new Error(data?.error || 'Kon organisatie niet activeren');

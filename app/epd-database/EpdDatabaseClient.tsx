@@ -24,6 +24,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 
 type EpdListItem = {
   id: string;
@@ -131,7 +132,13 @@ export default function EpdDatabaseClient() {
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        const res = await fetch('/api/org/active', { cache: 'no-store' });
+        let res = await fetch('/api/org/active', { cache: 'no-store' });
+        if (res.status === 401) {
+          const refreshed = await ensureSupabaseSession();
+          if (refreshed) {
+            res = await fetch('/api/org/active', { cache: 'no-store' });
+          }
+        }
         if (res.ok) {
           const json = (await res.json()) as ActiveOrgResponse;
           setActiveOrgId(json.organizationId ?? null);

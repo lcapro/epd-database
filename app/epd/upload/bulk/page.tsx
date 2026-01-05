@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 import { ParsedEpd } from '@/lib/types';
 
 type UploadStatus = 'pending' | 'uploading' | 'saving' | 'saved' | 'error';
@@ -59,7 +60,13 @@ export default function BulkUploadPage() {
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        const res = await fetch('/api/org/active', { cache: 'no-store' });
+        let res = await fetch('/api/org/active', { cache: 'no-store' });
+        if (res.status === 401) {
+          const refreshed = await ensureSupabaseSession();
+          if (refreshed) {
+            res = await fetch('/api/org/active', { cache: 'no-store' });
+          }
+        }
         if (res.ok) {
           const json = (await res.json()) as { organizationId: string | null };
           setActiveOrgId(json.organizationId ?? null);

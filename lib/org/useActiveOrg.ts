@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 
 export type ActiveOrgStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -20,7 +21,13 @@ export function useActiveOrg(enabled = true) {
     setState((prev) => ({ ...prev, status: 'loading', error: null }));
 
     try {
-      const response = await fetch('/api/org/active', { cache: 'no-store' });
+      let response = await fetch('/api/org/active', { cache: 'no-store' });
+      if (response.status === 401) {
+        const refreshed = await ensureSupabaseSession();
+        if (refreshed) {
+          response = await fetch('/api/org/active', { cache: 'no-store' });
+        }
+      }
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         throw new Error(data?.error || 'Kon actieve organisatie niet laden');
