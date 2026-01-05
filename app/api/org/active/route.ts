@@ -4,6 +4,7 @@ import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase
 import { ACTIVE_ORG_COOKIE, ActiveOrgError, getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { buildActiveOrgPostResult } from '@/lib/org/activeOrgPost';
+import { getSupabaseUserWithRefresh } from '@/lib/supabase/session';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,10 +13,7 @@ export async function GET() {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
   const hasCookie = hasSupabaseAuthCookie();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { user, error: authError } = await getSupabaseUserWithRefresh(supabase, hasCookie);
 
   if (!user) {
     console.warn('Supabase active org missing user', {

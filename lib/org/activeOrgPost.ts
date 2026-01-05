@@ -1,6 +1,7 @@
 import { ACTIVE_ORG_COOKIE } from '../activeOrgConstants';
 import { ActiveOrgError } from '../activeOrgErrors';
 import { assertOrgMember, OrgAuthError } from '../orgAuth';
+import { getSupabaseUserWithRefresh } from '../supabase/session';
 
 type ActiveOrgPostContext = {
   request: Request;
@@ -36,10 +37,7 @@ export async function buildActiveOrgPostResult({
   requestId = crypto.randomUUID(),
   assertMember = assertOrgMember,
 }: ActiveOrgPostContext): Promise<ActiveOrgPostResult> {
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { user, error: authError } = await getSupabaseUserWithRefresh(supabase, hasCookie);
 
   if (!user) {
     console.warn('Supabase active org set missing user', {
