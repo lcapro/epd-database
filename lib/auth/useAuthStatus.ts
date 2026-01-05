@@ -21,6 +21,20 @@ export function useAuthStatus(): AuthState {
     let active = true;
     const supabase = createSupabaseBrowserClient();
 
+    const hasAuthCookie = () => {
+      if (typeof document === 'undefined') return false;
+      return document.cookie.split(';').some((cookie) => cookie.trim().startsWith('sb-'));
+    };
+
+    const applySession = (session: { user: User } | null) => {
+      const user = session?.user ?? null;
+      setState({
+        status: user ? 'authenticated' : 'unauthenticated',
+        user,
+        error: null,
+      });
+    };
+
     const syncSession = async () => {
       const { data, error } = await supabase.auth.getSession();
       if (!active) return;
@@ -29,29 +43,44 @@ export function useAuthStatus(): AuthState {
         return;
       }
 
-      const user = data.session?.user ?? null;
-      setState({
-        status: user ? 'authenticated' : 'unauthenticated',
-        user,
-        error: null,
-      });
+      if (data.session) {
+        applySession(data.session);
+        return;
+      }
+
+      if (hasAuthCookie()) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!active) return;
+        if (refreshError) {
+          setState({ status: 'error', user: null, error: refreshError.message });
+          return;
+        }
+        applySession(refreshData.session ?? null);
+        return;
+      }
+
+      applySession(null);
     };
 
     syncSession();
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      const user = session?.user ?? null;
-      setState({
-        status: user ? 'authenticated' : 'unauthenticated',
-        user,
-        error: null,
-      });
+      applySession(session);
     });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       active = false;
       data.subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
