@@ -10,6 +10,10 @@ import AuthControls from '@/components/layout/AuthControls';
 import logoFull from '@/assets/infra_impact.png';
 import logoIcon from '@/assets/infra_impact-icoon.png';
 
+type SiteHeaderProps = {
+  showOrgSwitcher?: boolean;
+};
+
 const navItems = [
   { href: '/', label: 'Overzicht' },
   { href: '/epd-database', label: 'EPD database' },
@@ -17,7 +21,7 @@ const navItems = [
   { href: '/org', label: 'Teams' },
 ];
 
-export default function SiteHeader() {
+export default function SiteHeader({ showOrgSwitcher = true }: SiteHeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -58,7 +62,7 @@ export default function SiteHeader() {
           })}
         </nav>
         <div className="hidden md:flex items-center gap-3">
-          <OrgSwitcher />
+          {showOrgSwitcher && <OrgSwitcher />}
           <Link href="/epd/upload" className={buttonStyles({})}>
             Start upload
           </Link>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Alert,
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
-import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import { ParsedEpd } from '@/lib/types';
 
 type UploadStatus = 'pending' | 'uploading' | 'saving' | 'saved' | 'error';
@@ -54,6 +54,8 @@ function isPdf(file: File) {
 
 export default function BulkUploadPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { status: authStatus } = useAuthStatus();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,6 +64,13 @@ export default function BulkUploadPage() {
   const [activeOrgRecovering, setActiveOrgRecovering] = useState(false);
 
   useEffect(() => {
+    if (authStatus !== 'authenticated' || pathname === '/login') {
+      setActiveOrgId(null);
+      setActiveOrgChecked(false);
+      setActiveOrgRecovering(false);
+      return;
+    }
+
     const loadActiveOrg = async () => {
       try {
         const res = await fetchOrgEndpointWithRetry(
@@ -77,11 +86,6 @@ export default function BulkUploadPage() {
           },
         );
         if (res.status === 401) {
-          const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
-          if (shouldRedirect) {
-            router.push('/login');
-            return;
-          }
           setError('Sessie wordt gesynchroniseerd. Probeer het zo nog eens.');
           return;
         }
@@ -94,7 +98,7 @@ export default function BulkUploadPage() {
       }
     };
     loadActiveOrg();
-  }, [router]);
+  }, [authStatus, pathname, router]);
 
   const handleFiles = (files: FileList | File[]) => {
     const selected = Array.from(files);
