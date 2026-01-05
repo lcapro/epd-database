@@ -33,7 +33,9 @@ describe('getSupabaseUserWithRefresh', () => {
 
     assert.equal(result.user?.id, 'user-123');
     assert.equal(refreshCalls, 1);
-    assert.equal(getUserCalls, 1);
+    assert.equal(getUserCalls, 2);
+    assert.equal(result.attempts, 2);
+    assert.equal(result.didRetry, true);
   });
 
   it('retries getUser once after refresh when needed', async () => {
@@ -73,5 +75,7 @@ describe('getSupabaseUserWithRefresh', () => {
     assert.equal(result.user?.id, 'user-456');
     assert.equal(refreshCalls, 1);
     assert.equal(getUserCalls, 2);
+    assert.equal(result.attempts, 2);
+    assert.equal(result.didRetry, true);
   });
 });

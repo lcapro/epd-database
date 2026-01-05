@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Alert,
@@ -18,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
-import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
 import { ParsedEpd } from '@/lib/types';
 
 type UploadStatus = 'pending' | 'uploading' | 'saving' | 'saved' | 'error';
@@ -51,21 +52,32 @@ function isPdf(file: File) {
 }
 
 export default function BulkUploadPage() {
+  const router = useRouter();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [activeOrgChecked, setActiveOrgChecked] = useState(false);
+  const [activeOrgRecovering, setActiveOrgRecovering] = useState(false);
 
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        let res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
+        const res = await fetchOrgEndpointWithRetry(
+          '/api/org/active',
+          { cache: 'no-store', credentials: 'include' },
+          {
+            onRecoveringChange: setActiveOrgRecovering,
+            onRecover: (attempt) => {
+              if (attempt === 1) {
+                router.refresh();
+              }
+            },
+          },
+        );
         if (res.status === 401) {
-          const refreshed = await ensureSupabaseSession();
-          if (refreshed) {
-            res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
-          }
+          router.push('/login');
+          return;
         }
         if (res.ok) {
           const json = (await res.json()) as { organizationId: string | null };
@@ -76,7 +88,7 @@ export default function BulkUploadPage() {
       }
     };
     loadActiveOrg();
-  }, []);
+  }, [router]);
 
   const handleFiles = (files: FileList | File[]) => {
     const selected = Array.from(files);
@@ -226,6 +238,7 @@ export default function BulkUploadPage() {
 
   return (
     <div className="space-y-6">
+      {activeOrgRecovering && <p className="text-sm text-gray-600">Sessie herstellen...</p>}
       <Card>
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>

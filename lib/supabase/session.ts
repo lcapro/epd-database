@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 type SupabaseAuthResult = {
   user: { id: string } | null;
   error: { code?: string | null; message?: string | null } | null;
+  attempts: number;
+  didRetry: boolean;
 };
 
 export async function getSupabaseUserWithRefresh(
@@ -15,30 +17,41 @@ export async function getSupabaseUserWithRefresh(
   } = await supabase.auth.getUser();
 
   if (user) {
-    return { user, error: error ?? null };
+    return { user, error: error ?? null, attempts: 1, didRetry: false };
   }
 
   if (!hasCookie) {
-    return { user: null, error: error ?? null };
+    return { user: null, error: error ?? null, attempts: 1, didRetry: false };
   }
 
-  if (error?.message !== 'Auth session missing!') {
-    return { user: null, error };
+  const message = error?.message ?? '';
+  const normalizedMessage = message.toLowerCase();
+  const isMissingSession =
+    normalizedMessage.includes('auth session missing') || error?.code === 'AUTH_SESSION_MISSING';
+
+  if (!isMissingSession) {
+    return { user: null, error, attempts: 1, didRetry: false };
   }
 
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-  if (refreshError) {
-    return { user: null, error: refreshError };
-  }
-
-  if (refreshData.session?.user) {
-    return { user: refreshData.session.user, error: null };
-  }
 
   const {
     data: { user: refreshedUser },
     error: refreshedError,
   } = await supabase.auth.getUser();
 
-  return { user: refreshedUser ?? null, error: refreshedError ?? null };
+  if (refreshedUser) {
+    return { user: refreshedUser, error: null, attempts: 2, didRetry: true };
+  }
+
+  if (refreshData.session?.user) {
+    return { user: refreshData.session.user, error: null, attempts: 2, didRetry: true };
+  }
+
+  return {
+    user: null,
+    error: refreshedError ?? refreshError ?? error ?? null,
+    attempts: 2,
+    didRetry: true,
+  };
 }

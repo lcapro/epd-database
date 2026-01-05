@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { useRouter } from 'next/navigation';
+import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
 
-export type ActiveOrgStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type ActiveOrgStatus = 'idle' | 'loading' | 'recovering' | 'ready' | 'error';
 
 type ActiveOrgState = {
   status: ActiveOrgStatus;
@@ -10,6 +11,7 @@ type ActiveOrgState = {
 };
 
 export function useActiveOrg(enabled = true) {
+  const router = useRouter();
   const [state, setState] = useState<ActiveOrgState>({
     status: enabled ? 'loading' : 'idle',
     organizationId: null,
@@ -21,12 +23,30 @@ export function useActiveOrg(enabled = true) {
     setState((prev) => ({ ...prev, status: 'loading', error: null }));
 
     try {
-      let response = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
+      const response = await fetchOrgEndpointWithRetry(
+        '/api/org/active',
+        { cache: 'no-store', credentials: 'include' },
+        {
+          onRecoveringChange: (recovering) => {
+            if (recovering) {
+              setState((prev) => ({ ...prev, status: 'recovering', error: null }));
+            }
+          },
+          onRecover: (attempt) => {
+            if (attempt === 1) {
+              router.refresh();
+            }
+          },
+        },
+      );
       if (response.status === 401) {
-        const refreshed = await ensureSupabaseSession();
-        if (refreshed) {
-          response = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
-        }
+        setState({
+          status: 'error',
+          organizationId: null,
+          error: 'Je sessie is verlopen. Log opnieuw in.',
+        });
+        router.push('/login');
+        return;
       }
       if (!response.ok) {
         const data = await response.json().catch(() => null);
@@ -45,7 +65,7 @@ export function useActiveOrg(enabled = true) {
         error: err instanceof Error ? err.message : 'Kon actieve organisatie niet laden',
       });
     }
-  }, [enabled]);
+  }, [enabled, router]);
 
   useEffect(() => {
     if (!enabled) {
