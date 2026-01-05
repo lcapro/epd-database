@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -24,6 +25,8 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
+import infraImpactLogo from '@/assets/infra_impact.png';
+import infraImpactIcon from '@/assets/infra_impact-icoon.png';
 
 type EpdListItem = {
   id: string;
@@ -253,7 +256,21 @@ export default function EpdDatabaseClient() {
       <Card className="relative overflow-hidden border-brand-100/70 bg-white/85 shadow-soft backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-accent-500 to-brand-500" />
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="space-y-2">
+            <Link href="/epd-database" className="inline-flex items-center">
+              <Image
+                src={infraImpactLogo}
+                alt="Infra Impact"
+                className="hidden h-8 w-auto md:block"
+                priority
+              />
+              <Image
+                src={infraImpactIcon}
+                alt="Infra Impact"
+                className="h-8 w-auto md:hidden"
+                priority
+              />
+            </Link>
             <Badge variant="brand">Database</Badge>
             <CardTitle className="mt-2 bg-gradient-to-r from-brand-700 to-accent-700 bg-clip-text text-transparent">
               EPD database
