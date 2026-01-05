@@ -28,8 +28,9 @@ export async function getSupabaseUserWithRefresh(
   const normalizedMessage = message.toLowerCase();
   const isMissingSession =
     normalizedMessage.includes('auth session missing') || error?.code === 'AUTH_SESSION_MISSING';
+  const shouldAttemptRefresh = hasCookie && (!error || isMissingSession);
 
-  if (!isMissingSession) {
+  if (!shouldAttemptRefresh) {
     return { user: null, error, attempts: 1, didRetry: false };
   }
 

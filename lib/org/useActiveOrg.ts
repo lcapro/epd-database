@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
+import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
 
 export type ActiveOrgStatus = 'idle' | 'loading' | 'recovering' | 'ready' | 'error';
 
@@ -40,12 +41,17 @@ export function useActiveOrg(enabled = true) {
         },
       );
       if (response.status === 401) {
-        setState({
-          status: 'error',
-          organizationId: null,
-          error: 'Je sessie is verlopen. Log opnieuw in.',
-        });
-        router.push('/login');
+        const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
+        if (shouldRedirect) {
+          setState({
+            status: 'error',
+            organizationId: null,
+            error: 'Je sessie is verlopen. Log opnieuw in.',
+          });
+          router.push('/login');
+          return;
+        }
+        setState((prev) => ({ ...prev, status: 'recovering', error: null }));
         return;
       }
       if (!response.ok) {

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
+import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
 
 type EpdListItem = {
   id: string;
@@ -146,7 +147,12 @@ export default function EpdDatabaseClient() {
           },
         );
         if (res.status === 401) {
-          router.push('/login');
+          const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
+          if (shouldRedirect) {
+            router.push('/login');
+            return;
+          }
+          setError('Sessie wordt gesynchroniseerd. Probeer het zo nog eens.');
           return;
         }
         if (res.ok) {
