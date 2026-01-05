@@ -146,6 +146,7 @@ export default function OrgTeamPage() {
     await fetch('/api/org/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ organizationId: orgId }),
     });
     router.push('/epd-database');

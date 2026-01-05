@@ -45,7 +45,7 @@ export default function OrgSwitcher() {
       setLoading(true);
       setListError(null);
       try {
-        const orgRes = await fetch('/api/org/list', { cache: 'no-store' });
+        const orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
 
         if (orgRes.ok) {
           const json = (await orgRes.json()) as OrgListResponse;
@@ -75,6 +75,7 @@ export default function OrgSwitcher() {
       let response = await fetch('/api/org/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ organizationId: orgId }),
       });
       if (response.status === 401) {
@@ -83,6 +84,7 @@ export default function OrgSwitcher() {
           response = await fetch('/api/org/active', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ organizationId: orgId }),
           });
         }

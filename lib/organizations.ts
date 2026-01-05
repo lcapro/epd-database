@@ -1,5 +1,5 @@
 import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
-import { ACTIVE_ORG_COOKIE } from '@/lib/activeOrg';
+import { ACTIVE_ORG_COOKIE } from '@/lib/activeOrgConstants';
 
 export { ACTIVE_ORG_COOKIE };
 
