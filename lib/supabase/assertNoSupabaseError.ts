@@ -43,5 +43,14 @@ export function assertNoSupabaseError({
     details: result.error.details ?? null,
   });
 
-  return NextResponse.json({ error: `Supabase error during ${opName}` }, { status: 500 });
+  return NextResponse.json(
+    {
+      error: `Supabase error during ${opName}`,
+      opName,
+      code: result.error.code ?? null,
+      message: result.error.message ?? null,
+      details: result.error.details ?? null,
+    },
+    { status: 500 },
+  );
 }
