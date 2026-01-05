@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { requireActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 
@@ -53,7 +53,7 @@ async function fetchColumnValues(
 export async function GET() {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
     error: authError,
@@ -63,7 +63,7 @@ export async function GET() {
     console.warn('Supabase EPD filters missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });

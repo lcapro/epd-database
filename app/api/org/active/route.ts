@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { ACTIVE_ORG_COOKIE, ActiveOrgError, getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { buildActiveOrgPostResult } from '@/lib/org/activeOrgPost';
@@ -12,14 +12,17 @@ export const revalidate = 0;
 export async function GET() {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
-  const { user, error: authError } = await getSupabaseUserWithRefresh(supabase, hasCookie);
+  const cookieStatus = getSupabaseCookieStatus();
+  const { user, error: authError } = await getSupabaseUserWithRefresh(
+    supabase,
+    cookieStatus.hasSupabaseAuthCookie,
+  );
 
   if (!user) {
     console.warn('Supabase active org missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
@@ -97,9 +100,14 @@ export async function GET() {
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
+  const cookieStatus = getSupabaseCookieStatus();
   const cookieStore = cookies();
-  const result = await buildActiveOrgPostResult({ request, supabase, hasCookie, requestId });
+  const result = await buildActiveOrgPostResult({
+    request,
+    supabase,
+    cookieStatus,
+    requestId,
+  });
   if (result.setCookie) {
     cookieStore.set(result.setCookie.name, result.setCookie.value, result.setCookie.options);
   }

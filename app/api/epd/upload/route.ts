@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { assertNoSupabaseError } from '@/lib/supabase/assertNoSupabaseError';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   try {
     const supabase = createSupabaseRouteClient();
-    const hasCookie = hasSupabaseAuthCookie();
+    const cookieStatus = getSupabaseCookieStatus();
     const {
       data: { user },
       error: authError,
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       console.warn('Supabase EPD upload missing user', {
         requestId,
         hasUser: false,
-        hasCookie,
+        ...cookieStatus,
         epdId: null,
         impactsCount: null,
         organizationId: getActiveOrgId(),

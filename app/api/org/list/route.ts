@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
 import { getSupabaseUserWithRefresh } from '@/lib/supabase/session';
 
 export const dynamic = 'force-dynamic';
@@ -8,14 +8,17 @@ export const revalidate = 0;
 export async function GET() {
   const requestId = crypto.randomUUID();
   const supabase = createSupabaseRouteClient();
-  const hasCookie = hasSupabaseAuthCookie();
-  const { user, error: authError } = await getSupabaseUserWithRefresh(supabase, hasCookie);
+  const cookieStatus = getSupabaseCookieStatus();
+  const { user, error: authError } = await getSupabaseUserWithRefresh(
+    supabase,
+    cookieStatus.hasSupabaseAuthCookie,
+  );
 
   if (!user) {
     console.warn('Supabase org list missing user', {
       requestId,
       hasUser: false,
-      hasCookie,
+      ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });

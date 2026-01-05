@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { getSupabaseCookieStatusFromCookies, type SupabaseCookieStatus } from '@/lib/supabase/server';
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
@@ -15,20 +16,18 @@ export function createSupabaseRouteClient() {
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set({ name, value, ...options });
+        });
       },
     },
   });
 }
 
-export function hasSupabaseAuthCookie(): boolean {
-  const cookieStore = cookies();
-  return cookieStore.getAll().some((cookie) => cookie.name.startsWith('sb-'));
+export function getSupabaseCookieStatus(): SupabaseCookieStatus {
+  return getSupabaseCookieStatusFromCookies(cookies().getAll());
 }

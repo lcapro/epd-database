@@ -1,5 +1,15 @@
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { ACTIVE_ORG_COOKIE } from '@/lib/activeOrgConstants';
+
+type CookieList = { name: string }[];
+
+export type SupabaseCookieStatus = {
+  hasActiveOrgCookie: boolean;
+  hasSupabaseAuthCookie: boolean;
+};
+
+const SUPABASE_AUTH_COOKIE = /^sb-.*(auth-token|access-token|refresh-token)$/;
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
@@ -15,15 +25,24 @@ export function createSupabaseServerClient() {
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieStore.set({ name, value: '', ...options, maxAge: 0 });
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set({ name, value, ...options });
+        });
       },
     },
   });
+}
+
+export function getSupabaseCookieStatusFromCookies(cookiesList: CookieList): SupabaseCookieStatus {
+  const hasActiveOrgCookie = cookiesList.some((cookie) => cookie.name === ACTIVE_ORG_COOKIE);
+  const hasSupabaseAuthCookie = cookiesList.some((cookie) => SUPABASE_AUTH_COOKIE.test(cookie.name));
+  return { hasActiveOrgCookie, hasSupabaseAuthCookie };
+}
+
+export function getSupabaseCookieStatus(): SupabaseCookieStatus {
+  return getSupabaseCookieStatusFromCookies(cookies().getAll());
 }

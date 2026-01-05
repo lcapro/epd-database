@@ -45,7 +45,13 @@ export default function OrgSwitcher() {
       setLoading(true);
       setListError(null);
       try {
-        const orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+        let orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+        if (orgRes.status === 401) {
+          const refreshed = await ensureSupabaseSession();
+          if (refreshed) {
+            orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+          }
+        }
 
         if (orgRes.ok) {
           const json = (await orgRes.json()) as OrgListResponse;
@@ -67,7 +73,7 @@ export default function OrgSwitcher() {
   }, [authStatus]);
 
   const handleSwitch = async (orgId: string) => {
-    if (switching) return;
+    if (switching || authStatus !== 'authenticated' || activeStatus !== 'ready') return;
     const previousOrgId = organizationId;
     setSwitching(true);
     setOrganizationId(orgId);
