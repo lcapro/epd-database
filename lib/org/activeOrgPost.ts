@@ -4,14 +4,7 @@ import { assertOrgMember, OrgAuthError } from '../orgAuth';
 
 type ActiveOrgPostContext = {
   request: Request;
-  supabase: {
-    auth: {
-      getUser: () => Promise<{
-        data: { user: { id: string } | null };
-        error: { code?: string | null; message?: string | null } | null;
-      }>;
-    };
-  };
+  supabase: Parameters<typeof assertOrgMember>[0];
   hasCookie: boolean;
   requestId?: string;
   assertMember?: typeof assertOrgMember;
