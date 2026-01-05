@@ -113,6 +113,9 @@ export default function BulkUploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', item.file);
+      if (activeOrgId) {
+        formData.append('organizationId', activeOrgId);
+      }
 
       const uploadRes = await fetch('/api/epd/upload', {
         method: 'POST',
@@ -162,6 +165,7 @@ export default function BulkUploadPage() {
           verifierName: parsed.verifierName,
           standardSet: parsed.standardSet,
           impacts: parsed.impacts,
+          organizationId: activeOrgId,
         }),
       });
 
