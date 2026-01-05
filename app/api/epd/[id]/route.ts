@@ -14,9 +14,18 @@ import {
   selectImpactValue,
 } from '@/lib/epd/saveUtils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
+  const withNoStore = (init?: ResponseInit) => ({
+    ...init,
+    headers: { 'Cache-Control': 'no-store, max-age=0', ...(init?.headers ?? {}) },
+  });
+  const jsonResponse = (body: unknown, init?: ResponseInit) =>
+    applySupabaseCookies(NextResponse.json(body, withNoStore(init)));
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -32,7 +41,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    return jsonResponse({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
   let activeOrgId: string | null = null;
@@ -48,14 +57,17 @@ export async function GET(request: Request, { params }: { params: { id: string }
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return jsonResponse({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonResponse({ error: message }, { status: 400 });
   }
 
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    return jsonResponse(
+      { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+      { status: 400 },
+    );
   }
 
   const { data: epd, error } = await supabase
@@ -74,7 +86,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
-    return NextResponse.json({ error: error?.message || 'Niet gevonden' }, { status: 404 });
+    return jsonResponse({ error: error?.message || 'Niet gevonden' }, { status: 404 });
   }
 
   const { data: impacts, error: impactsError } = await supabase
@@ -92,14 +104,21 @@ export async function GET(request: Request, { params }: { params: { id: string }
       code: impactsError.code ?? null,
       message: impactsError.message ?? null,
     });
-    return NextResponse.json({ error: impactsError.message }, { status: 500 });
+    return jsonResponse({ error: impactsError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ epd, impacts: impacts || [] });
+  return jsonResponse({ epd, impacts: impacts || [] });
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
+  const withNoStore = (init?: ResponseInit) => ({
+    ...init,
+    headers: { 'Cache-Control': 'no-store, max-age=0', ...(init?.headers ?? {}) },
+  });
+  const jsonResponse = (body: unknown, init?: ResponseInit) =>
+    applySupabaseCookies(NextResponse.json(body, withNoStore(init)));
   const body = await request.json();
   const {
     productName,
@@ -137,7 +156,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   const cleanedFunctionalUnit = normalizeOptionalString(functionalUnit);
 
   if (!cleanedProductName || !cleanedFunctionalUnit) {
-    return NextResponse.json({ error: 'productName en functionalUnit zijn verplicht' }, { status: 400 });
+    return jsonResponse({ error: 'productName en functionalUnit zijn verplicht' }, { status: 400 });
   }
 
   const resolvedStandardSet = ALLOWED_SETS.includes(standardSet as EpdSetType)
@@ -160,7 +179,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   const productCategory = extractProductCategory(cleanedCustomAttributes);
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
-  const supabase = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -176,7 +194,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    return jsonResponse({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
   let activeOrgId: string | null = null;
@@ -192,14 +210,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return jsonResponse({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonResponse({ error: message }, { status: 400 });
   }
 
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    return jsonResponse(
+      { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+      { status: 400 },
+    );
   }
 
   const { data: epd, error } = await supabase
@@ -263,7 +284,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
-    return NextResponse.json({ error: error?.message || 'Kon EPD niet bijwerken' }, { status: 500 });
+    return jsonResponse({ error: error?.message || 'Kon EPD niet bijwerken' }, { status: 500 });
   }
 
   const { error: cleanupError } = await supabase
@@ -303,7 +324,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         code: impactError.code ?? null,
         message: impactError.message ?? null,
       });
-      return NextResponse.json({ error: impactError.message }, { status: 500 });
+      return jsonResponse({ error: impactError.message }, { status: 500 });
     }
   }
 
@@ -315,12 +336,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     status,
   });
 
-  return NextResponse.json({ id: params.id });
+  return jsonResponse({ id: params.id });
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
+  const withNoStore = (init?: ResponseInit) => ({
+    ...init,
+    headers: { 'Cache-Control': 'no-store, max-age=0', ...(init?.headers ?? {}) },
+  });
+  const jsonResponse = (body: unknown, init?: ResponseInit) =>
+    applySupabaseCookies(NextResponse.json(body, withNoStore(init)));
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -336,7 +363,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    return jsonResponse({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
   let activeOrgId: string | null = null;
@@ -352,14 +379,17 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return jsonResponse({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return jsonResponse({ error: message }, { status: 400 });
   }
 
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    return jsonResponse(
+      { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+      { status: 400 },
+    );
   }
 
   const { error } = await supabase
@@ -377,9 +407,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       code: error.code ?? null,
       message: error.message ?? null,
     });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonResponse({ error: error.message }, { status: 500 });
   }
 
   console.info('EPD deleted', { requestId, epdId: params.id, userId: user.id, organizationId: activeOrgId });
-  return NextResponse.json({ ok: true });
+  return jsonResponse({ ok: true });
 }

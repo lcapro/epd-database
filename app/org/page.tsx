@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle } from '@/components/ui';
@@ -29,22 +29,59 @@ type OrgListResponse = {
 export default function OrgOverviewPage() {
   const router = useRouter();
   const { status: authStatus } = useAuthStatus();
+  const refreshTriggered = useRef(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const {
     status: activeStatus,
     organizationId: activeOrgId,
     setOrganizationId,
     error: activeError,
-  } = useActiveOrg(authStatus === 'authenticated');
+  } = useActiveOrg(authStatus === 'authenticated' && sessionReady);
   const [memberships, setMemberships] = useState<MembershipWithOrg[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settingOrgId, setSettingOrgId] = useState<string | null>(null);
-  const canSwitchOrg = authStatus === 'authenticated' && activeStatus === 'ready';
+  const canSwitchOrg = authStatus === 'authenticated' && sessionReady && activeStatus === 'ready';
+
+  useEffect(() => {
+    let active = true;
+    const confirmSession = async () => {
+      if (authStatus !== 'authenticated') {
+        if (active) {
+          setSessionReady(false);
+          setSessionError(null);
+        }
+        return;
+      }
+
+      setSessionError(null);
+      const ready = await ensureSupabaseSession();
+      if (!active) return;
+      setSessionReady(ready);
+      if (!ready) {
+        setSessionError('Sessie kon niet bevestigd worden. Probeer het opnieuw.');
+      } else if (!refreshTriggered.current) {
+        refreshTriggered.current = true;
+        router.refresh();
+      }
+    };
+
+    confirmSession();
+
+    return () => {
+      active = false;
+    };
+  }, [authStatus, router]);
 
   useEffect(() => {
     const fetchData = async () => {
       if (authStatus !== 'authenticated') {
         setLoading(false);
+        return;
+      }
+      if (!sessionReady) {
+        setLoading(true);
         return;
       }
       setLoading(true);
@@ -74,7 +111,7 @@ export default function OrgOverviewPage() {
       }
     };
     fetchData();
-  }, [authStatus]);
+  }, [authStatus, sessionReady]);
 
   const handleSetActive = async (orgId: string) => {
     if (!canSwitchOrg) {
@@ -130,12 +167,13 @@ export default function OrgOverviewPage() {
           </Link>
         </CardHeader>
 
-        {(authStatus === 'loading' || loading || activeStatus === 'loading') && (
+        {(authStatus === 'loading' ||
+          (authStatus === 'authenticated' && (loading || activeStatus === 'loading' || !sessionReady))) && (
           <p className="mt-4 text-sm text-gray-600">Laden...</p>
         )}
-        {(error || activeError) && (
+        {(error || activeError || sessionError) && (
           <Alert variant="danger" className="mt-4">
-            {error ?? activeError}
+            {error ?? activeError ?? sessionError}
           </Alert>
         )}
 

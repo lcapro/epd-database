@@ -51,6 +51,11 @@ export function assertNoSupabaseError({
       message: result.error.message ?? null,
       details: result.error.details ?? null,
     },
-    { status: 500 },
+    {
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    },
   );
 }

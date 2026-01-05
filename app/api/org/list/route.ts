@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 export async function GET() {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const { user, error: authError } = await getSupabaseUserWithRefresh(
     supabase,
@@ -22,7 +22,8 @@ export async function GET() {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Niet ingelogd' },
       {
         status: 401,
@@ -30,6 +31,7 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -46,7 +48,8 @@ export async function GET() {
       code: error.code ?? null,
       message: error.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: error.message },
       {
         status: 500,
@@ -54,6 +57,7 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -62,12 +66,14 @@ export async function GET() {
     organization: membership.organization,
   }));
 
-  return NextResponse.json(
+  return applySupabaseCookies(
+    NextResponse.json(
     { items: memberships },
     {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
     },
+    ),
   );
 }
