@@ -21,11 +21,11 @@ export function useActiveOrg(enabled = true) {
     setState((prev) => ({ ...prev, status: 'loading', error: null }));
 
     try {
-      let response = await fetch('/api/org/active', { cache: 'no-store' });
+      let response = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
       if (response.status === 401) {
         const refreshed = await ensureSupabaseSession();
         if (refreshed) {
-          response = await fetch('/api/org/active', { cache: 'no-store' });
+          response = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
         }
       }
       if (!response.ok) {

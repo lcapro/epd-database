@@ -65,6 +65,7 @@ export default function OrgNewPage() {
       await fetch('/api/org/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ organizationId: orgId }),
       });
 
