@@ -21,7 +21,7 @@ function uniq(values: (string | null)[]) {
 }
 
 async function fetchColumnValues(
-  supabase: ReturnType<typeof createSupabaseRouteClient>,
+  supabase: ReturnType<typeof createSupabaseRouteClient>['supabase'],
   column: string,
   organizationId: string,
   requestId: string,
@@ -52,7 +52,7 @@ async function fetchColumnValues(
 
 export async function GET() {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -67,7 +67,8 @@ export async function GET() {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Niet ingelogd' },
       {
         status: 401,
@@ -75,6 +76,7 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -91,7 +93,8 @@ export async function GET() {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json(
+      return applySupabaseCookies(
+        NextResponse.json(
         { error: err.message },
         {
           status: err.status,
@@ -99,10 +102,12 @@ export async function GET() {
             'Cache-Control': 'no-store, max-age=0',
           },
         },
+        ),
       );
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: message },
       {
         status: 400,
@@ -110,11 +115,13 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
   if (!activeOrgId) {
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
       {
         status: 400,
@@ -122,6 +129,7 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -147,9 +155,11 @@ export async function GET() {
     productCategories: uniq(productCategories),
   };
 
-  return NextResponse.json(payload, {
-    headers: {
-      'Cache-Control': 'no-store, max-age=0',
-    },
-  });
+  return applySupabaseCookies(
+    NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    }),
+  );
 }

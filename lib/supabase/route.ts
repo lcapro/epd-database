@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { getSupabaseCookieStatusFromCookies, type SupabaseCookieStatus } from '@/lib/supabase/server';
 
@@ -9,23 +10,36 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
+type SupabaseCookie = { name: string; value: string; options: CookieOptions };
+
+export function applySupabaseCookiesToResponse(response: NextResponse, cookiesToSet: SupabaseCookie[]) {
+  cookiesToSet.forEach(({ name, value, options }) => {
+    response.cookies.set({ name, value, ...options });
+  });
+  return response;
+}
+
 export function createSupabaseRouteClient() {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
   const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const cookieStore = cookies();
+  const pendingCookies: SupabaseCookie[] = [];
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set({ name, value, ...options });
-        });
+      setAll(cookiesToSet: SupabaseCookie[]) {
+        pendingCookies.push(...cookiesToSet);
       },
     },
   });
+
+  const applySupabaseCookies = (response: NextResponse) =>
+    applySupabaseCookiesToResponse(response, pendingCookies);
+
+  return { supabase, applySupabaseCookies };
 }
 
 export function getSupabaseCookieStatus(): SupabaseCookieStatus {

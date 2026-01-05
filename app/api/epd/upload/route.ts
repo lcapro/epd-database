@@ -8,6 +8,8 @@ import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { parseEpd } from '@/lib/epdParser';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function sanitizePdfText(text: string): string {
   // Replace control characters that are not typically valid in JSON/text storage
@@ -18,8 +20,14 @@ function sanitizePdfText(text: string): string {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
+  const withNoStore = (init?: ResponseInit) => ({
+    ...init,
+    headers: { 'Cache-Control': 'no-store, max-age=0', ...(init?.headers ?? {}) },
+  });
+  const jsonResponse = (body: unknown, init?: ResponseInit) =>
+    applySupabaseCookies(NextResponse.json(body, withNoStore(init)));
   try {
-    const supabase = createSupabaseRouteClient();
     const cookieStatus = getSupabaseCookieStatus();
     const {
       data: { user },
@@ -37,7 +45,7 @@ export async function POST(request: Request) {
         code: authError?.code ?? null,
         message: authError?.message ?? null,
       });
-      return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+      return jsonResponse({ error: 'Niet ingelogd' }, { status: 401 });
     }
 
     const formData = await request.formData();
@@ -45,7 +53,10 @@ export async function POST(request: Request) {
     const activeOrgId = getActiveOrgId() ?? (typeof fallbackOrgId === 'string' ? fallbackOrgId : null);
 
     if (!activeOrgId) {
-      return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+      return jsonResponse(
+        { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+        { status: 400 },
+      );
     }
 
     try {
@@ -59,19 +70,19 @@ export async function POST(request: Request) {
           code: err.code ?? null,
           message: err.message,
         });
-        return NextResponse.json({ error: err.message }, { status: err.status });
+        return jsonResponse({ error: err.message }, { status: err.status });
       }
       const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-      return NextResponse.json({ error: message }, { status: 400 });
+      return jsonResponse({ error: message }, { status: 400 });
     }
     const file = formData.get('file');
 
     if (!(file instanceof Blob)) {
-      return NextResponse.json({ error: 'Bestand ontbreekt' }, { status: 400 });
+      return jsonResponse({ error: 'Bestand ontbreekt' }, { status: 400 });
     }
 
     if (file.type !== 'application/pdf') {
-      return NextResponse.json({ error: 'Alleen PDF-bestanden zijn toegestaan' }, { status: 400 });
+      return jsonResponse({ error: 'Alleen PDF-bestanden zijn toegestaan' }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -102,7 +113,7 @@ export async function POST(request: Request) {
       table: `storage:${bucket}`,
     });
     if (uploadErrorResponse) {
-      return uploadErrorResponse;
+      return applySupabaseCookies(uploadErrorResponse);
     }
 
     let parsedPdfText = '';
@@ -160,7 +171,7 @@ export async function POST(request: Request) {
         table: 'epd_files',
       });
       if (retryErrorResponse) {
-        return retryErrorResponse;
+        return applySupabaseCookies(retryErrorResponse);
       }
     } else {
       const insertErrorResponse = assertNoSupabaseError({
@@ -172,7 +183,7 @@ export async function POST(request: Request) {
         table: 'epd_files',
       });
       if (insertErrorResponse) {
-        return insertErrorResponse;
+        return applySupabaseCookies(insertErrorResponse);
       }
     }
 
@@ -186,7 +197,7 @@ export async function POST(request: Request) {
         code: insertError?.code ?? null,
         message: insertError?.message ?? null,
       });
-      return NextResponse.json({ error: insertError?.message || 'Kon bestand niet opslaan' }, { status: 500 });
+      return jsonResponse({ error: insertError?.message || 'Kon bestand niet opslaan' }, { status: 500 });
     }
 
     console.info('EPD upload stored', {
@@ -199,7 +210,7 @@ export async function POST(request: Request) {
       epdId: null,
     });
 
-    return NextResponse.json({
+    return jsonResponse({
       fileId: insertData.id,
       storagePath: path,
       rawText: parsedPdfText,
@@ -212,6 +223,6 @@ export async function POST(request: Request) {
       message: err instanceof Error ? err.message : 'Onbekende fout',
     });
     const message = err instanceof Error ? err.message : 'Onbekende fout bij uploaden';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonResponse({ error: message }, { status: 500 });
   }
 }

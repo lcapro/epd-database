@@ -14,8 +14,16 @@ export async function getSupabaseUserWithRefresh(
     error,
   } = await supabase.auth.getUser();
 
-  if (user || !hasCookie) {
+  if (user) {
     return { user, error: error ?? null };
+  }
+
+  if (!hasCookie) {
+    return { user: null, error: error ?? null };
+  }
+
+  if (error?.message !== 'Auth session missing!') {
+    return { user: null, error };
   }
 
   const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();

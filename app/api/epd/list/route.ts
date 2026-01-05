@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const from = (filters.page - 1) * filters.pageSize;
   const to = from + filters.pageSize - 1;
 
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -29,7 +29,8 @@ export async function GET(request: Request) {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Niet ingelogd' },
       {
         status: 401,
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -53,7 +55,8 @@ export async function GET(request: Request) {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json(
+      return applySupabaseCookies(
+        NextResponse.json(
         { error: err.message },
         {
           status: err.status,
@@ -61,10 +64,12 @@ export async function GET(request: Request) {
             'Cache-Control': 'no-store, max-age=0',
           },
         },
+        ),
       );
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: message },
       {
         status: 400,
@@ -72,11 +77,13 @@ export async function GET(request: Request) {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
   if (!activeOrgId) {
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
       {
         status: 400,
@@ -84,6 +91,7 @@ export async function GET(request: Request) {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -130,7 +138,8 @@ export async function GET(request: Request) {
       code: error.code ?? null,
       message: error.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: error.message },
       {
         status: 500,
@@ -138,10 +147,12 @@ export async function GET(request: Request) {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
-  return NextResponse.json(
+  return applySupabaseCookies(
+    NextResponse.json(
     {
       items: data || [],
       total: count || 0,
@@ -153,5 +164,6 @@ export async function GET(request: Request) {
         'Cache-Control': 'no-store, max-age=0',
       },
     },
+    ),
   );
 }

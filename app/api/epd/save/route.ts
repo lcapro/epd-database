@@ -16,6 +16,9 @@ import {
   selectImpactValue,
 } from '@/lib/epd/saveUtils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type EpdHashInput = {
   organizationId: string;
   productName: string;
@@ -44,6 +47,13 @@ const makeEpdHashKey = (input: EpdHashInput) => {
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
+  const withNoStore = (init?: ResponseInit) => ({
+    ...init,
+    headers: { 'Cache-Control': 'no-store, max-age=0', ...(init?.headers ?? {}) },
+  });
+  const jsonResponse = (body: unknown, init?: ResponseInit) =>
+    applySupabaseCookies(NextResponse.json(body, withNoStore(init)));
   const body = await request.json();
   const {
     fileId,
@@ -86,7 +96,7 @@ export async function POST(request: Request) {
   const cleanedProducerName = normalizeOptionalString(producerName);
 
   if (!cleanedProductName || !cleanedFunctionalUnit) {
-    return NextResponse.json({ error: 'productName en functionalUnit zijn verplicht' }, { status: 400 });
+    return jsonResponse({ error: 'productName en functionalUnit zijn verplicht' }, { status: 400 });
   }
 
   const resolvedStandardSet = ALLOWED_SETS.includes(standardSet as EpdSetType)
@@ -111,7 +121,6 @@ export async function POST(request: Request) {
   const productCategory = extractProductCategory(cleanedCustomAttributes);
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
-  const supabase = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -129,12 +138,15 @@ export async function POST(request: Request) {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    return jsonResponse({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
   const activeOrgId = getActiveOrgId() ?? normalizeOptionalString(organizationId);
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    return jsonResponse(
+      { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+      { status: 400 },
+    );
   }
 
   try {
@@ -148,7 +160,7 @@ export async function POST(request: Request) {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return jsonResponse({ error: err.message }, { status: err.status });
     }
     console.error('EPD save membership check failed', {
       requestId,
@@ -156,7 +168,7 @@ export async function POST(request: Request) {
       organizationId: activeOrgId,
       message: err instanceof Error ? err.message : 'Onbekende fout',
     });
-    return NextResponse.json({ error: 'Kon lidmaatschap niet controleren' }, { status: 500 });
+    return jsonResponse({ error: 'Kon lidmaatschap niet controleren' }, { status: 500 });
   }
 
   const hashKey = makeEpdHashKey({
@@ -242,12 +254,12 @@ export async function POST(request: Request) {
     table: 'epds',
   });
   if (epdErrorResponse) {
-    return epdErrorResponse;
+    return applySupabaseCookies(epdErrorResponse);
   }
 
   const epd = epdResult.data;
   if (!epd) {
-    return NextResponse.json({ error: 'Kon EPD niet opslaan' }, { status: 500 });
+    return jsonResponse({ error: 'Kon EPD niet opslaan' }, { status: 500 });
   }
 
   if (impactsCount) {
@@ -265,7 +277,7 @@ export async function POST(request: Request) {
       table: 'epd_impacts',
     });
     if (cleanupErrorResponse) {
-      return cleanupErrorResponse;
+      return applySupabaseCookies(cleanupErrorResponse);
     }
     const mapped = cleanedImpacts.map((impact) => ({
       organization_id: activeOrgId,
@@ -297,9 +309,9 @@ export async function POST(request: Request) {
         table: 'epds',
       });
       if (cleanupEpdErrorResponse) {
-        return cleanupEpdErrorResponse;
+        return applySupabaseCookies(cleanupEpdErrorResponse);
       }
-      return impactErrorResponse;
+      return applySupabaseCookies(impactErrorResponse);
     }
   }
 
@@ -313,5 +325,5 @@ export async function POST(request: Request) {
     status,
   });
 
-  return NextResponse.json({ id: epd.id });
+  return jsonResponse({ id: epd.id });
 }

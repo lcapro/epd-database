@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const format = searchParams.get('format') || 'excel';
   const filters = parseEpdListFilters(searchParams);
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const {
     data: { user },
@@ -31,7 +31,17 @@ export async function GET(request: Request) {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    return applySupabaseCookies(
+      NextResponse.json(
+        { error: 'Niet ingelogd' },
+        {
+          status: 401,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      ),
+    );
   }
 
   let activeOrgId: string | null = null;
@@ -47,14 +57,44 @@ export async function GET(request: Request) {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return applySupabaseCookies(
+        NextResponse.json(
+          { error: err.message },
+          {
+            status: err.status,
+            headers: {
+              'Cache-Control': 'no-store, max-age=0',
+            },
+          },
+        ),
+      );
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return applySupabaseCookies(
+      NextResponse.json(
+        { error: message },
+        {
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      ),
+    );
   }
 
   if (!activeOrgId) {
-    return NextResponse.json({ error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' }, { status: 400 });
+    return applySupabaseCookies(
+      NextResponse.json(
+        { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+        {
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      ),
+    );
   }
 
   let query = supabase
@@ -96,7 +136,7 @@ export async function GET(request: Request) {
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: error?.message || 'Geen data' },
       {
         status: 500,
@@ -105,6 +145,7 @@ export async function GET(request: Request) {
         },
       },
     );
+    return applySupabaseCookies(response);
   }
 
   const withImpacts: DatabaseExportWithImpacts[] = data.map((epd) => ({
@@ -115,7 +156,7 @@ export async function GET(request: Request) {
 
   if (format === 'csv') {
     const csv = exportToCsv(rows);
-    return new NextResponse(csv, {
+    const response = new NextResponse(csv, {
       status: 200,
       headers: {
         'Cache-Control': 'no-store, max-age=0',
@@ -123,10 +164,11 @@ export async function GET(request: Request) {
         'Content-Disposition': 'attachment; filename="epds.csv"',
       },
     });
+    return applySupabaseCookies(response);
   }
 
   const buffer = await exportToWorkbook(rows);
-  return new NextResponse(buffer, {
+  const response = new NextResponse(buffer, {
     status: 200,
     headers: {
       'Cache-Control': 'no-store, max-age=0',
@@ -134,4 +176,5 @@ export async function GET(request: Request) {
       'Content-Disposition': 'attachment; filename="epds.xlsx"',
     },
   });
+  return applySupabaseCookies(response);
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createSupabaseRouteClient, getSupabaseCookieStatus } from '@/lib/supabase/route';
-import { ACTIVE_ORG_COOKIE, ActiveOrgError, getActiveOrgId } from '@/lib/activeOrg';
+import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { buildActiveOrgPostResult } from '@/lib/org/activeOrgPost';
 import { getSupabaseUserWithRefresh } from '@/lib/supabase/session';
@@ -11,7 +10,7 @@ export const revalidate = 0;
 
 export async function GET() {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
   const { user, error: authError } = await getSupabaseUserWithRefresh(
     supabase,
@@ -26,7 +25,8 @@ export async function GET() {
       code: authError?.code ?? null,
       message: authError?.message ?? null,
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Niet ingelogd' },
       {
         status: 401,
@@ -34,18 +34,21 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
   const activeOrgId = getActiveOrgId();
   if (!activeOrgId) {
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { organizationId: null },
       {
         headers: {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
@@ -60,7 +63,8 @@ export async function GET() {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json(
+      return applySupabaseCookies(
+        NextResponse.json(
         { error: err.message },
         {
           status: err.status,
@@ -68,6 +72,7 @@ export async function GET() {
             'Cache-Control': 'no-store, max-age=0',
           },
         },
+        ),
       );
     }
     console.error('Active org lookup failed', {
@@ -76,7 +81,8 @@ export async function GET() {
       organizationId: activeOrgId,
       message: err instanceof Error ? err.message : 'Onbekende fout',
     });
-    return NextResponse.json(
+    return applySupabaseCookies(
+      NextResponse.json(
       { error: 'Kon actieve organisatie niet ophalen' },
       {
         status: 500,
@@ -84,32 +90,41 @@ export async function GET() {
           'Cache-Control': 'no-store, max-age=0',
         },
       },
+      ),
     );
   }
 
-  return NextResponse.json(
+  return applySupabaseCookies(
+    NextResponse.json(
     { organizationId: activeOrgId },
     {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
     },
+    ),
   );
 }
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseRouteClient();
+  const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
-  const cookieStore = cookies();
   const result = await buildActiveOrgPostResult({
     request,
     supabase,
     cookieStatus,
     requestId,
   });
+  const response = applySupabaseCookies(
+    NextResponse.json(result.body, { status: result.status, headers: result.headers }),
+  );
   if (result.setCookie) {
-    cookieStore.set(result.setCookie.name, result.setCookie.value, result.setCookie.options);
+    response.cookies.set({
+      name: result.setCookie.name,
+      value: result.setCookie.value,
+      ...result.setCookie.options,
+    });
   }
-  return NextResponse.json(result.body, { status: result.status, headers: result.headers });
+  return response;
 }
