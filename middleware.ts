@@ -16,6 +16,13 @@ function isUnderPath(pathname: string, roots: string[]) {
   return roots.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
 
+function applySupabaseCookies(from: NextResponse, to: NextResponse) {
+  from.cookies.getAll().forEach((cookie) => {
+    to.cookies.set(cookie);
+  });
+  return to;
+}
+
 export async function middleware(request: NextRequest) {
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
   const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -47,7 +54,7 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     loginUrl.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
-    return NextResponse.redirect(loginUrl);
+    return applySupabaseCookies(response, NextResponse.redirect(loginUrl));
   }
 
   if (user && pathname === '/login') {
@@ -55,7 +62,7 @@ export async function middleware(request: NextRequest) {
     const activeOrgId = request.cookies.get(ACTIVE_ORG_COOKIE)?.value;
     redirectUrl.pathname = activeOrgId ? '/epd-database' : '/org';
     redirectUrl.search = '';
-    return NextResponse.redirect(redirectUrl);
+    return applySupabaseCookies(response, NextResponse.redirect(redirectUrl));
   }
 
   if (user && needsOrg) {
@@ -64,7 +71,7 @@ export async function middleware(request: NextRequest) {
       const orgUrl = request.nextUrl.clone();
       orgUrl.pathname = '/org';
       orgUrl.search = '';
-      return NextResponse.redirect(orgUrl);
+      return applySupabaseCookies(response, NextResponse.redirect(orgUrl));
     }
   }
 

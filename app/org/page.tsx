@@ -39,6 +39,7 @@ export default function OrgOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settingOrgId, setSettingOrgId] = useState<string | null>(null);
+  const canSwitchOrg = authStatus === 'authenticated' && activeStatus === 'ready';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,7 +50,7 @@ export default function OrgOverviewPage() {
       setLoading(true);
       setError(null);
       try {
-        const orgRes = await fetch('/api/org/list', { cache: 'no-store' });
+        const orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
 
         if (!orgRes.ok) {
           const data = await orgRes.json().catch(() => null);
@@ -70,6 +71,10 @@ export default function OrgOverviewPage() {
   }, [authStatus]);
 
   const handleSetActive = async (orgId: string) => {
+    if (!canSwitchOrg) {
+      setError('Sessie wordt nog geladen. Probeer zo nog eens.');
+      return;
+    }
     if (settingOrgId) return;
     setSettingOrgId(orgId);
     setError(null);
@@ -77,6 +82,7 @@ export default function OrgOverviewPage() {
       let response = await fetch('/api/org/active', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ organizationId: orgId }),
       });
       if (response.status === 401) {
@@ -85,6 +91,7 @@ export default function OrgOverviewPage() {
           response = await fetch('/api/org/active', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ organizationId: orgId }),
           });
         }
@@ -148,7 +155,7 @@ export default function OrgOverviewPage() {
                   <Button
                     variant={activeOrgId === membership.organization.id ? 'secondary' : 'primary'}
                     loading={settingOrgId === membership.organization.id}
-                    disabled={Boolean(settingOrgId)}
+                    disabled={!canSwitchOrg || Boolean(settingOrgId)}
                     onClick={() => handleSetActive(membership.organization.id)}
                   >
                     {activeOrgId === membership.organization.id ? 'Actief' : 'Activeer'}

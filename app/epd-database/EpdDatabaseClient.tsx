@@ -132,11 +132,11 @@ export default function EpdDatabaseClient() {
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        let res = await fetch('/api/org/active', { cache: 'no-store' });
+        let res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
         if (res.status === 401) {
           const refreshed = await ensureSupabaseSession();
           if (refreshed) {
-            res = await fetch('/api/org/active', { cache: 'no-store' });
+            res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
           }
         }
         if (res.ok) {

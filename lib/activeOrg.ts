@@ -1,15 +1,8 @@
 import { cookies } from 'next/headers';
+import { ACTIVE_ORG_COOKIE } from '@/lib/activeOrgConstants';
+import { ActiveOrgError } from '@/lib/activeOrgErrors';
 
-export const ACTIVE_ORG_COOKIE = 'active_org_id';
-
-export class ActiveOrgError extends Error {
-  status: number;
-
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
+export { ACTIVE_ORG_COOKIE, ActiveOrgError };
 
 export function getActiveOrgId(): string | null {
   return cookies().get(ACTIVE_ORG_COOKIE)?.value ?? null;
