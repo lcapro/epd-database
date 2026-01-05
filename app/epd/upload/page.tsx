@@ -207,6 +207,9 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (activeOrgId) {
+        formData.append('organizationId', activeOrgId);
+      }
 
       const res = await fetch('/api/epd/upload', {
         method: 'POST',
@@ -281,6 +284,7 @@ export default function UploadPage() {
           standardSet: form.standardSet,
           customAttributes,
           impacts,
+          organizationId: activeOrgId,
         }),
       });
 

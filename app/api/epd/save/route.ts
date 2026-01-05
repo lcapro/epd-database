@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { assertNoSupabaseError } from '@/lib/supabase/assertNoSupabaseError';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { EpdSetType, ParsedImpact } from '@/lib/types';
@@ -130,7 +131,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Kon lidmaatschap niet controleren' }, { status: 500 });
   }
 
-  const { data: epd, error } = await supabase
+  const epdResult = await supabase
     .from('epds')
     .upsert(
       {
@@ -188,35 +189,39 @@ export async function POST(request: Request) {
     .select('id')
     .single();
 
-  if (error || !epd) {
-    console.error('Supabase EPD save failed', {
-      requestId,
-      fileId: fileId ?? null,
-      userId: user.id,
-      organizationId: activeOrgId,
-      impactsCount,
-      epdId: null,
-      code: error?.code ?? null,
-      message: error?.message ?? null,
-    });
-    return NextResponse.json({ error: error?.message || 'Kon EPD niet opslaan' }, { status: 500 });
+  const epdErrorResponse = assertNoSupabaseError({
+    result: epdResult,
+    opName: 'upsert_epds',
+    requestId,
+    userId: user.id,
+    organizationId: activeOrgId,
+    table: 'epds',
+  });
+  if (epdErrorResponse) {
+    return epdErrorResponse;
+  }
+
+  const epd = epdResult.data;
+  if (!epd) {
+    return NextResponse.json({ error: 'Kon EPD niet opslaan' }, { status: 500 });
   }
 
   if (impactsCount) {
-    const { error: cleanupError } = await supabase
+    const cleanupResult = await supabase
       .from('epd_impacts')
       .delete()
       .eq('epd_id', epd.id)
       .eq('organization_id', activeOrgId);
-    if (cleanupError) {
-      console.warn('Kon bestaande impacts niet verwijderen', {
-        requestId,
-        epdId: epd.id,
-        userId: user.id,
-        organizationId: activeOrgId,
-        code: cleanupError.code ?? null,
-        message: cleanupError.message ?? null,
-      });
+    const cleanupErrorResponse = assertNoSupabaseError({
+      result: cleanupResult,
+      opName: 'delete_impacts',
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      table: 'epd_impacts',
+    });
+    if (cleanupErrorResponse) {
+      return cleanupErrorResponse;
     }
     const mapped = cleanedImpacts.map((impact) => ({
       organization_id: activeOrgId,
@@ -228,19 +233,29 @@ export async function POST(request: Request) {
       unit: impact.unit,
     }));
 
-    const { error: impactError } = await supabase.from('epd_impacts').insert(mapped);
-    if (impactError) {
-      console.error('Supabase impact save failed', {
+    const impactResult = await supabase.from('epd_impacts').insert(mapped);
+    const impactErrorResponse = assertNoSupabaseError({
+      result: impactResult,
+      opName: 'insert_impacts',
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      table: 'epd_impacts',
+    });
+    if (impactErrorResponse) {
+      const cleanupEpdResult = await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
+      const cleanupEpdErrorResponse = assertNoSupabaseError({
+        result: cleanupEpdResult,
+        opName: 'delete_epd_after_impact_failure',
         requestId,
-        epdId: epd.id,
         userId: user.id,
         organizationId: activeOrgId,
-        impactsCount,
-        code: impactError.code ?? null,
-        message: impactError.message ?? null,
+        table: 'epds',
       });
-      await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
-      return NextResponse.json({ error: impactError.message }, { status: 500 });
+      if (cleanupEpdErrorResponse) {
+        return cleanupEpdErrorResponse;
+      }
+      return impactErrorResponse;
     }
   }
 

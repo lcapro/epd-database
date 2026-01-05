@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import pdfParse from 'pdf-parse';
 import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
+import { assertNoSupabaseError } from '@/lib/supabase/assertNoSupabaseError';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { parseEpd } from '@/lib/epdParser';
@@ -78,21 +79,21 @@ export async function POST(request: Request) {
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'epd-pdfs';
     const path = `epd/${uuidv4()}-${filename}`;
 
-    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, buffer, {
+    const uploadResult = await supabase.storage.from(bucket).upload(path, buffer, {
       contentType: 'application/pdf',
       upsert: false,
     });
 
-    if (uploadError) {
-      console.error('Supabase EPD upload failed', {
-        requestId,
-        userId: user.id,
-        organizationId: activeOrgId,
-        epdId: null,
-        impactsCount: null,
-        message: uploadError.message ?? null,
-      });
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    const uploadErrorResponse = assertNoSupabaseError({
+      result: uploadResult,
+      opName: 'upload_epd_pdf',
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      table: `storage:${bucket}`,
+    });
+    if (uploadErrorResponse) {
+      return uploadErrorResponse;
     }
 
     let parsedPdfText = '';
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
       parseError = err instanceof Error ? err.message : 'Onbekende fout bij het lezen van de PDF-tekst';
     }
 
-    const { data, error } = await supabase
+    const insertResult = await supabase
       .from('epd_files')
       .insert({
         organization_id: activeOrgId,
@@ -128,8 +129,8 @@ export async function POST(request: Request) {
       .select('id')
       .single();
 
-    let insertData = data;
-    let insertError = error;
+    let insertData = insertResult.data;
+    let insertError = insertResult.error;
 
     if (insertError && insertError.message?.toLowerCase().includes('unsupported unicode escape')) {
       console.warn('Kon raw_text niet opslaan door Unicode-fout, probeer zonder tekst', insertError);
@@ -140,6 +141,29 @@ export async function POST(request: Request) {
         .single();
       insertData = retry.data;
       insertError = retry.error;
+      const retryErrorResponse = assertNoSupabaseError({
+        result: retry,
+        opName: 'insert_epd_files_retry',
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        table: 'epd_files',
+      });
+      if (retryErrorResponse) {
+        return retryErrorResponse;
+      }
+    } else {
+      const insertErrorResponse = assertNoSupabaseError({
+        result: insertResult,
+        opName: 'insert_epd_files',
+        requestId,
+        userId: user.id,
+        organizationId: activeOrgId,
+        table: 'epd_files',
+      });
+      if (insertErrorResponse) {
+        return insertErrorResponse;
+      }
     }
 
     if (insertError || !insertData) {
