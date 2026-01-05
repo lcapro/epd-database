@@ -66,6 +66,7 @@ export async function POST(request: Request) {
 
   const cleanedCustomAttributes = cleanCustomAttributes(customAttributes);
   const cleanedImpacts = cleanImpacts(impacts);
+  const impactsCount = cleanedImpacts.length;
 
   const determinationMethod = resolveDeterminationMethod(
     normalizeOptionalString(lcaMethod),
@@ -181,13 +182,14 @@ export async function POST(request: Request) {
       fileId: fileId ?? null,
       userId: user.id,
       organizationId: activeOrgId,
+      impactsCount,
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
     return NextResponse.json({ error: error?.message || 'Kon EPD niet opslaan' }, { status: 500 });
   }
 
-  if (cleanedImpacts.length) {
+  if (impactsCount) {
     const { error: cleanupError } = await supabase
       .from('epd_impacts')
       .delete()
@@ -215,16 +217,17 @@ export async function POST(request: Request) {
 
     const { error: impactError } = await supabase.from('epd_impacts').insert(mapped);
     if (impactError) {
-      console.error('Supabase impact save failed', {
-        requestId,
-        epdId: epd.id,
-        userId: user.id,
-        organizationId: activeOrgId,
-        code: impactError.code ?? null,
-        message: impactError.message ?? null,
-      });
-      await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
-      return NextResponse.json({ error: impactError.message }, { status: 500 });
+    console.error('Supabase impact save failed', {
+      requestId,
+      epdId: epd.id,
+      userId: user.id,
+      organizationId: activeOrgId,
+      impactsCount,
+      code: impactError.code ?? null,
+      message: impactError.message ?? null,
+    });
+    await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
+    return NextResponse.json({ error: impactError.message }, { status: 500 });
     }
   }
 
@@ -234,6 +237,7 @@ export async function POST(request: Request) {
     fileId: fileId ?? null,
     userId: user.id,
     organizationId: activeOrgId,
+    impactsCount,
     status,
   });
 
