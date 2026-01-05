@@ -101,7 +101,12 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from('epd_files')
-      .insert({ storage_path: path, original_filename: filename, raw_text: parsedPdfText })
+      .insert({
+        organization_id: activeOrgId,
+        storage_path: path,
+        original_filename: filename,
+        raw_text: parsedPdfText,
+      })
       .select('id')
       .single();
 
@@ -112,7 +117,7 @@ export async function POST(request: Request) {
       console.warn('Kon raw_text niet opslaan door Unicode-fout, probeer zonder tekst', insertError);
       const retry = await supabase
         .from('epd_files')
-        .insert({ storage_path: path, original_filename: filename, raw_text: '' })
+        .insert({ organization_id: activeOrgId, storage_path: path, original_filename: filename, raw_text: '' })
         .select('id')
         .single();
       insertData = retry.data;
