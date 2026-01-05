@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Alert, Badge, Button, Card, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
 import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import { postActiveOrg } from '@/lib/org/activeOrgClient';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
@@ -103,7 +104,12 @@ export default function OrgOverviewPage() {
           },
         );
         if (orgRes.status === 401) {
-          router.push('/login');
+          const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
+          if (shouldRedirect) {
+            router.push('/login');
+            return;
+          }
+          setError('Sessie wordt gesynchroniseerd. Probeer het zo nog eens.');
           return;
         }
 

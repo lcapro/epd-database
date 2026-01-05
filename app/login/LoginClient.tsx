@@ -21,6 +21,7 @@ export default function LoginClient() {
   const [error, setError] = useState<string | null>(null);
 
   const nextPath = searchParams.get('next') || '/org';
+  const passwordAutocomplete = mode === 'login' ? 'current-password' : 'new-password';
 
   useEffect(() => {
     if (authStatus === 'authenticated') {
@@ -41,7 +42,6 @@ export default function LoginClient() {
       if (mode === 'login') {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
-        router.push(nextPath);
         router.refresh();
       } else {
         const { error: signUpError } = await supabase.auth.signUp({ email, password });
@@ -99,18 +99,24 @@ export default function LoginClient() {
           <CardDescription>Gebruik je e-mail om toegang te krijgen tot je organisaties.</CardDescription>
         </CardHeader>
         <form className="mt-6 space-y-4" onSubmit={handleAuth}>
-          <FormField label="E-mail" required>
+          <FormField label="E-mail" htmlFor="login-email" required>
             <Input
+              id="login-email"
+              name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
               placeholder="naam@bedrijf.nl"
             />
           </FormField>
-          <FormField label="Wachtwoord" required>
+          <FormField label="Wachtwoord" htmlFor="login-password" required>
             <Input
+              id="login-password"
+              name="password"
               type="password"
+              autoComplete={passwordAutocomplete}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
