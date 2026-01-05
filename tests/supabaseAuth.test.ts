@@ -44,4 +44,38 @@ describe('supabase auth helpers', () => {
     assert.equal(result.setCookie?.name, 'active_org_id');
     assert.equal(result.setCookie?.value, 'org-123');
   });
+
+  it('accepts bearer token when supabase cookies are missing', async () => {
+    const request = new Request('http://localhost/api/org/active', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer token-123' },
+      body: JSON.stringify({ organizationId: 'org-456' }),
+    });
+
+    const supabase = {
+      auth: {
+        getUser: async (token?: string) => {
+          if (token) {
+            return { data: { user: { id: 'user-456' } }, error: null };
+          }
+          return {
+            data: { user: null },
+            error: { code: 'AUTH_SESSION_MISSING', message: 'Auth session missing!' },
+          };
+        },
+        refreshSession: async () => ({ data: { session: null }, error: null }),
+      },
+    };
+
+    const result = await buildActiveOrgPostResult({
+      request,
+      supabase: supabase as Parameters<typeof buildActiveOrgPostResult>[0]['supabase'],
+      cookieStatus: { hasActiveOrgCookie: false, hasSupabaseAuthCookie: false },
+      requestId: 'test-request',
+      assertMember: async () => 'owner',
+    });
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.activeOrgId, 'org-456');
+  });
 });

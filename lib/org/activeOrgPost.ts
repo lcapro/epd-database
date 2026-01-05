@@ -31,6 +31,14 @@ function normalizeOrganizationId(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function getBearerToken(request: Request): string | null {
+  const header = request.headers.get('authorization') ?? request.headers.get('Authorization');
+  if (!header) return null;
+  const [scheme, token] = header.split(' ');
+  if (!scheme || scheme.toLowerCase() !== 'bearer' || !token) return null;
+  return token.trim() || null;
+}
+
 export async function buildActiveOrgPostResult({
   request,
   supabase,
@@ -38,16 +46,32 @@ export async function buildActiveOrgPostResult({
   requestId = crypto.randomUUID(),
   assertMember = assertOrgMember,
 }: ActiveOrgPostContext): Promise<ActiveOrgPostResult> {
-  const { user, error: authError, attempts } = await getSupabaseUserWithRefresh(
+  let { user, error: authError, attempts } = await getSupabaseUserWithRefresh(
     supabase,
     cookieStatus.hasSupabaseAuthCookie,
   );
+
+  if (!user) {
+    const bearerToken = getBearerToken(request);
+    if (bearerToken) {
+      const {
+        data: { user: bearerUser },
+        error: bearerError,
+      } = await supabase.auth.getUser(bearerToken);
+      if (bearerUser) {
+        user = bearerUser;
+        authError = bearerError ?? null;
+        attempts = Math.max(attempts, 1);
+      }
+    }
+  }
 
   if (!user) {
     console.warn('Supabase active org set missing user', {
       requestId,
       hasUser: false,
       ...cookieStatus,
+      hasAuthorizationHeader: Boolean(getBearerToken(request)),
       code: authError?.code ?? null,
       message: authError?.message ?? null,
       attempt: `${attempts}/2`,
