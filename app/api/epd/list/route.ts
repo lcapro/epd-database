@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
 import { requireActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { applyEpdListFilters, parseEpdListFilters } from '@/lib/epdFilters';
@@ -14,13 +14,30 @@ export async function GET(request: Request) {
   const from = (filters.page - 1) * filters.pageSize;
   const to = from + filters.pageSize - 1;
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    console.warn('Supabase EPD list missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
+    return NextResponse.json(
+      { error: 'Niet ingelogd' },
+      {
+        status: 401,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   }
 
   let activeOrgId: string | null = null;
@@ -36,14 +53,38 @@ export async function GET(request: Request) {
         code: err.code ?? null,
         message: err.message,
       });
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json(
+        { error: err.message },
+        {
+          status: err.status,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+          },
+        },
+      );
     }
     const message = err instanceof Error ? err.message : 'Geen actieve organisatie geselecteerd';
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      { error: message },
+      {
+        status: 400,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   }
 
   if (!activeOrgId) {
-    return NextResponse.json({ error: "Geen actieve organisatie geselecteerd. Kies eerst een organisatie." }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Geen actieve organisatie geselecteerd. Kies eerst een organisatie.' },
+      {
+        status: 400,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   }
 
   let query = supabase

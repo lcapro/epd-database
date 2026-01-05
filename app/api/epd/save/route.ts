@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
 import { getActiveOrgId } from '@/lib/activeOrg';
 import { assertOrgMember, OrgAuthError } from '@/lib/orgAuth';
 import { EpdSetType, ParsedImpact } from '@/lib/types';
@@ -82,12 +82,24 @@ export async function POST(request: Request) {
   const productCategory = extractProductCategory(cleanedCustomAttributes);
   const databaseVersion = normalizeOptionalString(databaseName || databaseEcoinventVersion || databaseNmdVersion);
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
+    console.warn('Supabase EPD save missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      impactsCount,
+      epdId: null,
+      organizationId: getActiveOrgId() ?? normalizeOptionalString(organizationId),
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
     return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
   }
 
@@ -183,6 +195,7 @@ export async function POST(request: Request) {
       userId: user.id,
       organizationId: activeOrgId,
       impactsCount,
+      epdId: null,
       code: error?.code ?? null,
       message: error?.message ?? null,
     });
@@ -217,17 +230,17 @@ export async function POST(request: Request) {
 
     const { error: impactError } = await supabase.from('epd_impacts').insert(mapped);
     if (impactError) {
-    console.error('Supabase impact save failed', {
-      requestId,
-      epdId: epd.id,
-      userId: user.id,
-      organizationId: activeOrgId,
-      impactsCount,
-      code: impactError.code ?? null,
-      message: impactError.message ?? null,
-    });
-    await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
-    return NextResponse.json({ error: impactError.message }, { status: 500 });
+      console.error('Supabase impact save failed', {
+        requestId,
+        epdId: epd.id,
+        userId: user.id,
+        organizationId: activeOrgId,
+        impactsCount,
+        code: impactError.code ?? null,
+        message: impactError.message ?? null,
+      });
+      await supabase.from('epds').delete().eq('id', epd.id).eq('organization_id', activeOrgId);
+      return NextResponse.json({ error: impactError.message }, { status: 500 });
     }
   }
 

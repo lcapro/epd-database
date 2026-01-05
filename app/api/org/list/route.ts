@@ -1,18 +1,35 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseRouteClient, hasSupabaseAuthCookie } from '@/lib/supabase/route';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
   const requestId = crypto.randomUUID();
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
+  const hasCookie = hasSupabaseAuthCookie();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
+    console.warn('Supabase org list missing user', {
+      requestId,
+      hasUser: false,
+      hasCookie,
+      code: authError?.code ?? null,
+      message: authError?.message ?? null,
+    });
+    return NextResponse.json(
+      { error: 'Niet ingelogd' },
+      {
+        status: 401,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      },
+    );
   }
 
   const { data, error } = await supabase
