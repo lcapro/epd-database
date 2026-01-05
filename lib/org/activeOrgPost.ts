@@ -38,7 +38,7 @@ export async function buildActiveOrgPostResult({
   requestId = crypto.randomUUID(),
   assertMember = assertOrgMember,
 }: ActiveOrgPostContext): Promise<ActiveOrgPostResult> {
-  const { user, error: authError } = await getSupabaseUserWithRefresh(
+  const { user, error: authError, attempts } = await getSupabaseUserWithRefresh(
     supabase,
     cookieStatus.hasSupabaseAuthCookie,
   );
@@ -50,6 +50,7 @@ export async function buildActiveOrgPostResult({
       ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
+      attempt: `${attempts}/2`,
     });
     return {
       status: 401,

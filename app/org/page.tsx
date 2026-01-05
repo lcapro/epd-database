@@ -8,6 +8,7 @@ import { buttonStyles } from '@/components/ui/button';
 import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
 import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import { postActiveOrg } from '@/lib/org/activeOrgClient';
+import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
 import { useActiveOrg } from '@/lib/org/useActiveOrg';
 
 type Organization = {
@@ -43,6 +44,7 @@ export default function OrgOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settingOrgId, setSettingOrgId] = useState<string | null>(null);
+  const [orgListRecovering, setOrgListRecovering] = useState(false);
   const canSwitchOrg = authStatus === 'authenticated' && sessionReady && activeStatus === 'ready';
 
   useEffect(() => {
@@ -88,12 +90,21 @@ export default function OrgOverviewPage() {
       setLoading(true);
       setError(null);
       try {
-        let orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
+        const orgRes = await fetchOrgEndpointWithRetry(
+          '/api/org/list',
+          { cache: 'no-store', credentials: 'include' },
+          {
+            onRecoveringChange: setOrgListRecovering,
+            onRecover: (attempt) => {
+              if (attempt === 1) {
+                router.refresh();
+              }
+            },
+          },
+        );
         if (orgRes.status === 401) {
-          const refreshed = await ensureSupabaseSession();
-          if (refreshed) {
-            orgRes = await fetch('/api/org/list', { cache: 'no-store', credentials: 'include' });
-          }
+          router.push('/login');
+          return;
         }
 
         if (!orgRes.ok) {
@@ -112,7 +123,7 @@ export default function OrgOverviewPage() {
       }
     };
     fetchData();
-  }, [authStatus, sessionReady]);
+  }, [authStatus, router, sessionReady]);
 
   const handleSetActive = async (orgId: string) => {
     if (!canSwitchOrg) {
@@ -162,8 +173,12 @@ export default function OrgOverviewPage() {
         </CardHeader>
 
         {(authStatus === 'loading' ||
-          (authStatus === 'authenticated' && (loading || activeStatus === 'loading' || !sessionReady))) && (
+          (authStatus === 'authenticated' &&
+            (loading || activeStatus === 'loading' || activeStatus === 'recovering' || !sessionReady))) && (
           <p className="mt-4 text-sm text-gray-600">Laden...</p>
+        )}
+        {(orgListRecovering || activeStatus === 'recovering') && (
+          <p className="mt-2 text-sm text-gray-600">Sessie herstellen...</p>
         )}
         {(error || activeError || sessionError) && (
           <Alert variant="danger" className="mt-4">

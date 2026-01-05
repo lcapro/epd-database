@@ -9,7 +9,7 @@ export async function GET() {
   const requestId = crypto.randomUUID();
   const { supabase, applySupabaseCookies } = createSupabaseRouteClient();
   const cookieStatus = getSupabaseCookieStatus();
-  const { user, error: authError } = await getSupabaseUserWithRefresh(
+  const { user, error: authError, attempts } = await getSupabaseUserWithRefresh(
     supabase,
     cookieStatus.hasSupabaseAuthCookie,
   );
@@ -21,6 +21,7 @@ export async function GET() {
       ...cookieStatus,
       code: authError?.code ?? null,
       message: authError?.message ?? null,
+      attempt: `${attempts}/2`,
     });
     return applySupabaseCookies(
       NextResponse.json(

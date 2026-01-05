@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
-import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
 
 type EpdListItem = {
   id: string;
@@ -123,6 +123,7 @@ export default function EpdDatabaseClient() {
   const [error, setError] = useState<string | null>(null);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [activeOrgChecked, setActiveOrgChecked] = useState(false);
+  const [activeOrgRecovering, setActiveOrgRecovering] = useState(false);
 
   const page = Number(searchParams.get('page') || '1');
   const sort = (searchParams.get('sort') as SortKey | null) ?? 'updated_at';
@@ -132,12 +133,21 @@ export default function EpdDatabaseClient() {
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        let res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
+        const res = await fetchOrgEndpointWithRetry(
+          '/api/org/active',
+          { cache: 'no-store', credentials: 'include' },
+          {
+            onRecoveringChange: setActiveOrgRecovering,
+            onRecover: (attempt) => {
+              if (attempt === 1) {
+                router.refresh();
+              }
+            },
+          },
+        );
         if (res.status === 401) {
-          const refreshed = await ensureSupabaseSession();
-          if (refreshed) {
-            res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
-          }
+          router.push('/login');
+          return;
         }
         if (res.ok) {
           const json = (await res.json()) as ActiveOrgResponse;
@@ -148,7 +158,7 @@ export default function EpdDatabaseClient() {
       }
     };
     loadActiveOrg();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     setFilters(parseFilters(searchParams));
@@ -257,6 +267,7 @@ export default function EpdDatabaseClient() {
 
   return (
     <div className="space-y-6">
+      {activeOrgRecovering && <p className="text-sm text-gray-600">Sessie herstellen...</p>}
       <Card className="relative overflow-hidden border-brand-100/70 bg-white/85 shadow-soft backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-accent-500 to-brand-500" />
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
-import { ensureSupabaseSession } from '@/lib/auth/ensureSupabaseSession';
+import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
 import {
   ALL_INDICATOR_CODES,
   IMPACT_INDICATORS,
@@ -59,6 +59,7 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [activeOrgChecked, setActiveOrgChecked] = useState(false);
+  const [activeOrgRecovering, setActiveOrgRecovering] = useState(false);
 
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
 
@@ -90,12 +91,21 @@ export default function UploadPage() {
   useEffect(() => {
     const loadActiveOrg = async () => {
       try {
-        let res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
+        const res = await fetchOrgEndpointWithRetry(
+          '/api/org/active',
+          { cache: 'no-store', credentials: 'include' },
+          {
+            onRecoveringChange: setActiveOrgRecovering,
+            onRecover: (attempt) => {
+              if (attempt === 1) {
+                router.refresh();
+              }
+            },
+          },
+        );
         if (res.status === 401) {
-          const refreshed = await ensureSupabaseSession();
-          if (refreshed) {
-            res = await fetch('/api/org/active', { cache: 'no-store', credentials: 'include' });
-          }
+          router.push('/login');
+          return;
         }
         if (res.ok) {
           const json = (await res.json()) as { organizationId: string | null };
@@ -106,7 +116,7 @@ export default function UploadPage() {
       }
     };
     loadActiveOrg();
-  }, []);
+  }, [router]);
 
   const impactKey = (indicator: string, setType: EpdSetType, stage: EpdImpactStage) =>
     `${indicator}|${setType}|${stage}`;
@@ -388,9 +398,10 @@ export default function UploadPage() {
   }, [parsed]);
 
   if (activeOrgChecked && !activeOrgId) {
-    return (
-      <div className="space-y-6">
-        <Card>
+  return (
+    <div className="space-y-6">
+      {activeOrgRecovering && <p className="text-sm text-gray-600">Sessie herstellen...</p>}
+      <Card>
           <CardHeader>
             <Badge variant="brand">EPD upload</Badge>
             <CardTitle className="mt-2">Kies een organisatie</CardTitle>
