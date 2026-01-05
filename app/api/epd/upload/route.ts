@@ -77,7 +77,16 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const filename = (file as File).name || 'upload.pdf';
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'epd-pdfs';
-    const path = `epd/${uuidv4()}-${filename}`;
+    const fileId = uuidv4();
+    const path = `org/${activeOrgId}/${fileId}.pdf`;
+
+    console.info('EPD upload starting', {
+      requestId,
+      userId: user.id,
+      organizationId: activeOrgId,
+      objectPath: path,
+      bucket,
+    });
 
     const uploadResult = await supabase.storage.from(bucket).upload(path, buffer, {
       contentType: 'application/pdf',
@@ -121,6 +130,7 @@ export async function POST(request: Request) {
     const insertResult = await supabase
       .from('epd_files')
       .insert({
+        id: fileId,
         organization_id: activeOrgId,
         storage_path: path,
         original_filename: filename,
@@ -136,7 +146,7 @@ export async function POST(request: Request) {
       console.warn('Kon raw_text niet opslaan door Unicode-fout, probeer zonder tekst', insertError);
       const retry = await supabase
         .from('epd_files')
-        .insert({ organization_id: activeOrgId, storage_path: path, original_filename: filename, raw_text: '' })
+        .insert({ id: fileId, organization_id: activeOrgId, storage_path: path, original_filename: filename, raw_text: '' })
         .select('id')
         .single();
       insertData = retry.data;
@@ -183,6 +193,8 @@ export async function POST(request: Request) {
       requestId,
       userId: user.id,
       organizationId: activeOrgId,
+      objectPath: path,
+      bucket,
       impactsCount,
       epdId: null,
     });
