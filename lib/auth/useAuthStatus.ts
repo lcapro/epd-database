@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { hasSupabaseAuthCookie } from '@/lib/auth/supabaseAuthCookies';
@@ -17,6 +17,7 @@ export function useAuthStatus(): AuthState {
     user: null,
     error: null,
   });
+  const initialCheckComplete = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -35,11 +36,13 @@ export function useAuthStatus(): AuthState {
       const { data, error } = await supabase.auth.getSession();
       if (!active) return;
       if (error) {
+        initialCheckComplete.current = true;
         setState({ status: 'unauthenticated', user: null, error: error.message });
         return;
       }
 
       if (data.session && hasSupabaseAuthCookie()) {
+        initialCheckComplete.current = true;
         applySession(data.session);
         return;
       }
@@ -48,22 +51,25 @@ export function useAuthStatus(): AuthState {
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
         if (!active) return;
         if (refreshError) {
+          initialCheckComplete.current = true;
           setState({ status: 'unauthenticated', user: null, error: refreshError.message });
           return;
         }
         if (refreshData.session && hasSupabaseAuthCookie()) {
+          initialCheckComplete.current = true;
           applySession(refreshData.session);
           return;
         }
       }
 
+      initialCheckComplete.current = true;
       applySession(null);
     };
 
     syncSession();
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
+      if (!active || !initialCheckComplete.current) return;
       applySession(session);
     });
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
-import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
 
 export type ActiveOrgStatus = 'idle' | 'loading' | 'recovering' | 'ready' | 'error';
 
@@ -13,14 +13,17 @@ type ActiveOrgState = {
 
 export function useActiveOrg(enabled = true) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { status: authStatus } = useAuthStatus();
   const [state, setState] = useState<ActiveOrgState>({
     status: enabled ? 'loading' : 'idle',
     organizationId: null,
     error: null,
   });
+  const canFetch = enabled && authStatus === 'authenticated' && pathname !== '/login';
 
   const refresh = useCallback(async () => {
-    if (!enabled) return;
+    if (!canFetch) return;
     setState((prev) => ({ ...prev, status: 'loading', error: null }));
 
     try {
@@ -41,16 +44,6 @@ export function useActiveOrg(enabled = true) {
         },
       );
       if (response.status === 401) {
-        const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
-        if (shouldRedirect) {
-          setState({
-            status: 'error',
-            organizationId: null,
-            error: 'Je sessie is verlopen. Log opnieuw in.',
-          });
-          router.push('/login');
-          return;
-        }
         setState((prev) => ({ ...prev, status: 'recovering', error: null }));
         return;
       }
@@ -71,15 +64,15 @@ export function useActiveOrg(enabled = true) {
         error: err instanceof Error ? err.message : 'Kon actieve organisatie niet laden',
       });
     }
-  }, [enabled, router]);
+  }, [canFetch, router]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!canFetch) {
       setState({ status: 'idle', organizationId: null, error: null });
       return;
     }
     refresh();
-  }, [enabled, refresh]);
+  }, [canFetch, refresh]);
 
   const setOrganizationId = useCallback((organizationId: string | null) => {
     setState((prev) => ({ ...prev, organizationId }));

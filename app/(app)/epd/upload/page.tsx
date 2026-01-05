@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ParsedEpd, ParsedImpact, EpdImpactStage, EpdSetType, ImpactIndicator } from '@/lib/types';
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
-import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 import {
   ALL_INDICATOR_CODES,
   IMPACT_INDICATORS,
@@ -48,6 +48,8 @@ type UnitState = Record<string, string>;
 
 export default function UploadPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { status: authStatus } = useAuthStatus();
 
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -90,6 +92,13 @@ export default function UploadPage() {
   });
 
   useEffect(() => {
+    if (authStatus !== 'authenticated' || pathname === '/login') {
+      setActiveOrgId(null);
+      setActiveOrgChecked(false);
+      setActiveOrgRecovering(false);
+      return;
+    }
+
     const loadActiveOrg = async () => {
       try {
         const res = await fetchOrgEndpointWithRetry(
@@ -105,11 +114,6 @@ export default function UploadPage() {
           },
         );
         if (res.status === 401) {
-          const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
-          if (shouldRedirect) {
-            router.push('/login');
-            return;
-          }
           setError('Sessie wordt gesynchroniseerd. Probeer het zo nog eens.');
           return;
         }
@@ -122,7 +126,7 @@ export default function UploadPage() {
       }
     };
     loadActiveOrg();
-  }, [router]);
+  }, [authStatus, pathname, router]);
 
   const impactKey = (indicator: string, setType: EpdSetType, stage: EpdImpactStage) =>
     `${indicator}|${setType}|${stage}`;

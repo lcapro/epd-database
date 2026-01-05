@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Alert,
   Badge,
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui';
 import { buttonStyles } from '@/components/ui/button';
 import { fetchOrgEndpointWithRetry } from '@/lib/org/orgApiRetry';
-import { shouldRedirectToLoginAfterUnauthorized } from '@/lib/auth/shouldRedirectToLogin';
+import { useAuthStatus } from '@/lib/auth/useAuthStatus';
 
 type EpdListItem = {
   id: string;
@@ -116,7 +116,9 @@ function buildSearchParams(filters: typeof defaultFilters, overrides?: Record<st
 
 export default function EpdDatabaseClient() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { status: authStatus } = useAuthStatus();
   const [filters, setFilters] = useState(() => parseFilters(searchParams));
   const [data, setData] = useState<ListResponse | null>(null);
   const [options, setOptions] = useState<FilterOptions | null>(null);
@@ -132,6 +134,13 @@ export default function EpdDatabaseClient() {
   const defaultSortParams = useMemo(() => ({ sort, order }), [sort, order]);
 
   useEffect(() => {
+    if (authStatus !== 'authenticated' || pathname === '/login') {
+      setActiveOrgId(null);
+      setActiveOrgChecked(false);
+      setActiveOrgRecovering(false);
+      return;
+    }
+
     const loadActiveOrg = async () => {
       try {
         const res = await fetchOrgEndpointWithRetry(
@@ -147,11 +156,6 @@ export default function EpdDatabaseClient() {
           },
         );
         if (res.status === 401) {
-          const shouldRedirect = await shouldRedirectToLoginAfterUnauthorized();
-          if (shouldRedirect) {
-            router.push('/login');
-            return;
-          }
           setError('Sessie wordt gesynchroniseerd. Probeer het zo nog eens.');
           return;
         }
@@ -164,7 +168,7 @@ export default function EpdDatabaseClient() {
       }
     };
     loadActiveOrg();
-  }, [router]);
+  }, [authStatus, pathname, router]);
 
   useEffect(() => {
     setFilters(parseFilters(searchParams));
